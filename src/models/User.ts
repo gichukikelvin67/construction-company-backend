@@ -13,6 +13,7 @@ export interface IUser extends Document{
     email:String;
     password:String;
     role:UserRole;
+    company: mongoose.Types.ObjectId;
     isActive: boolean;
 }
 
@@ -39,6 +40,12 @@ const userSchema=new Schema<IUser>(
             minlength:8,
         },
 
+        company:{
+            type:Schema.Types.ObjectId,
+            ref:"Company",
+            required:true,
+        },
+
         role:{
             type:String,
             enum:["admin","project_manager","site_supervisor","accountant","storekeeper"],
@@ -57,5 +64,5 @@ const userSchema=new Schema<IUser>(
 
     
 )
-const User=mongoose.model<IUser>("User, userSchema");
+const User=mongoose.model<IUser>("User", userSchema);
 export default User;
