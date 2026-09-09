@@ -6,15 +6,19 @@ export type UserRole=
 |"project_manager"
 |"site_supervisor"
 |"accountant"
-|"storekeeer";
+|"storekeeper";
 
 export interface IUser extends Document{
-    name:String;
-    email:String;
-    password:String;
+    name:string;
+    email:string;
+    password:string;
     role:UserRole;
     company: mongoose.Types.ObjectId;
     isActive: boolean;
+
+    emailVerified:boolean;
+    emailVerificationToken:string | null;
+    emailVerificationExpires:Date | null;
 }
 
 const userSchema=new Schema<IUser>(
@@ -56,7 +60,23 @@ const userSchema=new Schema<IUser>(
             type:Boolean,
             default:true,
         },
+
+        emailVerified:{
+            type:Boolean,
+            default:false,
+        },
+        emailVerificationToken:{
+            type:String,
+            default:null,
+        },
+
+        emailVerificationExpires:{
+            type:Date,
+            default:null,
+        }
     },
+
+
 
         {
             timestamps:true,
