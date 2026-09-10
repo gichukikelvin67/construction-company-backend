@@ -2,11 +2,14 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import Company from "../models/Company.js";
 import User from "../models/User.js";
+import Session from "../models/Session.js";
+import { hashToken } from "../utils/hashToken.js";
 import {
   generateAccessToken,
   generateRefreshToken
 } from "../utils/generateTokens.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
+import jwt from "jsonwebtoken";
 
 export const register = async (
   req: Request,
@@ -137,6 +140,17 @@ export const login =async(
         const refreshToken=generateRefreshToken(
             user._id.toString()
         )
+const refreshTokenHash = hashToken(refreshToken);
+
+await Session.create({
+  user: user._id,
+  refreshTokenHash,
+  expiresAt: new Date(
+    Date.now() + 7 * 24 * 60 * 60 * 1000
+  ),
+  revokedAt: null,
+});
+
 
         res.cookie("refreshToken", refreshToken,{
             httpOnly:true,
@@ -217,6 +231,175 @@ export const getMe = async (
     res.status(500).json({
       success: false,
       message: "Something went wrong",
+    });
+  }
+};
+
+export const refreshAccessToken = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      res.status(401).json({
+        success: false,
+        message: "Refresh token not found",
+      });
+
+      return;
+    }
+
+    const secret = process.env.JWT_REFRESH_SECRET;
+
+    if (!secret) {
+      throw new Error("JWT_REFRESH_SECRET is not defined");
+    }
+
+    const decoded = jwt.verify(refreshToken, secret) as {
+      userId: string;
+    };
+    const refreshTokenHash = hashToken(refreshToken);
+
+    const session = await Session.findOne({
+      refreshTokenHash,
+      user: decoded.userId,
+      revokedAt: null,
+    });
+
+    if (!session) {
+      res.status(401).json({
+        success: false,
+        message: "Refresh token is no longer valid",
+      });
+
+      return;
+    }
+
+    if (session.expiresAt < new Date()) {
+      session.revokedAt = new Date();
+      await session.save();
+
+      res.status(401).json({
+        success: false,
+        message: "Refresh token has expired",
+      });
+
+      return;
+    }
+
+
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      res.status(401).json({
+        success: false,
+        message: "User no longer exists",
+      });
+
+      return;
+    }
+
+    if (!user.isActive) {
+      res.status(403).json({
+        success: false,
+        message: "Your account has been disabled",
+      });
+
+      return;
+    }
+
+    //Revoke the old refresh token
+    session.revokedAt=new Date();
+    await session.save();
+
+    //create new tokens
+    const newAccessToken=generateAccessToken(
+        user._id.toString()
+
+    )
+    const newRefreshToken=generateRefreshToken(
+        user._id.toString()
+    )
+
+      // Hash the new refresh token
+    const newRefreshTokenHash = hashToken(
+      newRefreshToken
+    );
+
+    // Create a new session
+    await Session.create({
+      user: user._id,
+      refreshTokenHash: newRefreshTokenHash,
+      expiresAt: new Date(
+        Date.now() + 7 * 24 * 60 * 60 * 1000
+      ),
+      revokedAt: null,
+    });
+
+    // Replace cookie with new refresh token
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/api/auth",
+    });
+
+    res.status(200).json({
+      success: true,
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    console.error("Refresh token error:", error);
+
+    res.status(401).json({
+      success: false,
+      message: "Invalid or expired refresh token",
+    });
+  }
+};
+
+//logout
+export const logout = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (refreshToken) {
+      const refreshTokenHash = hashToken(refreshToken);
+
+      await Session.findOneAndUpdate(
+        {
+          refreshTokenHash,
+          revokedAt: null,
+        },
+        {
+          revokedAt: new Date(),
+        }
+      );
+    }
+
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/api/auth",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Logout successful",
+    });
+  } catch (error) {
+    console.error("Logout error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Something went wrong during logout",
     });
   }
 };
