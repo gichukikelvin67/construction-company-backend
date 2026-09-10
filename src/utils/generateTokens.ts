@@ -22,7 +22,7 @@ const getRefreshTokenSecret= (): string =>{
 export const generateAccessToken=(userId:string): string =>{
     const secret =getAccessTokenSecret();
 
-    console.log("Access token secret loaded:",Boolean(secret));
+    
     return jwt.sign(
         {
             userId,

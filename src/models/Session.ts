@@ -29,6 +29,7 @@ const sessionSchema=new Schema<ISession>(
                     type: Date,
                     required: true,
                     index: true,
+                    expires:0,
 
                 },
 

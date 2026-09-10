@@ -257,28 +257,87 @@ export const refreshAccessToken = async (
       throw new Error("JWT_REFRESH_SECRET is not defined");
     }
 
-    const decoded = jwt.verify(refreshToken, secret) as {
+    const decoded = jwt.verify(
+      refreshToken,
+      secret
+    ) as {
       userId: string;
     };
+
     const refreshTokenHash = hashToken(refreshToken);
 
+    /*
+     * Find the session belonging to this refresh token.
+     */
     const session = await Session.findOne({
       refreshTokenHash,
       user: decoded.userId,
-      revokedAt: null,
     });
 
+    /*
+     * No session means this refresh token was never
+     * issued by our application.
+     */
     if (!session) {
       res.status(401).json({
         success: false,
-        message: "Refresh token is no longer valid",
+        message: "Refresh token is not recognized",
       });
 
       return;
     }
 
+    /*
+     * If the token was already revoked, somebody is
+     * trying to use an old refresh token.
+     */
+    if (session.revokedAt) {
+      console.warn(
+        `Refresh token reuse detected for user ${decoded.userId}`
+      );
+
+      /*
+       * Revoke every active session belonging to this user.
+       */
+      await Session.updateMany(
+        {
+          user: decoded.userId,
+          revokedAt: null,
+        },
+        {
+          $set: {
+            revokedAt: new Date(),
+          },
+        }
+      );
+
+      /*
+       * Remove the suspicious refresh token from
+       * the browser.
+       */
+      res.clearCookie("refreshToken", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/api/auth",
+      });
+
+      res.status(401).json({
+        success: false,
+        message:
+          "Refresh token reuse detected. Please log in again.",
+      });
+
+      return;
+    }
+
+    /*
+     * Check whether the refresh token has expired
+     * in our database.
+     */
     if (session.expiresAt < new Date()) {
       session.revokedAt = new Date();
+
       await session.save();
 
       res.status(401).json({
@@ -289,10 +348,16 @@ export const refreshAccessToken = async (
       return;
     }
 
-
+    /*
+     * Find the user.
+     */
     const user = await User.findById(decoded.userId);
 
     if (!user) {
+      session.revokedAt = new Date();
+
+      await session.save();
+
       res.status(401).json({
         success: false,
         message: "User no longer exists",
@@ -301,6 +366,9 @@ export const refreshAccessToken = async (
       return;
     }
 
+    /*
+     * Disabled users cannot refresh their session.
+     */
     if (!user.isActive) {
       res.status(403).json({
         success: false,
@@ -310,25 +378,36 @@ export const refreshAccessToken = async (
       return;
     }
 
-    //Revoke the old refresh token
-    session.revokedAt=new Date();
+    /*
+     * The old refresh token has now been used.
+     * Kill it permanently.
+     */
+    session.revokedAt = new Date();
+
     await session.save();
 
-    //create new tokens
-    const newAccessToken=generateAccessToken(
-        user._id.toString()
+    /*
+     * Create a completely new pair of tokens.
+     */
+    const newAccessToken = generateAccessToken(
+      user._id.toString()
+    );
 
-    )
-    const newRefreshToken=generateRefreshToken(
-        user._id.toString()
-    )
+    const newRefreshToken = generateRefreshToken(
+      user._id.toString()
+    );
 
-      // Hash the new refresh token
+    /*
+     * Never store the actual refresh token.
+     * Store only its SHA-256 hash.
+     */
     const newRefreshTokenHash = hashToken(
       newRefreshToken
     );
 
-    // Create a new session
+    /*
+     * Create a new session for the new refresh token.
+     */
     await Session.create({
       user: user._id,
       refreshTokenHash: newRefreshTokenHash,
@@ -338,7 +417,9 @@ export const refreshAccessToken = async (
       revokedAt: null,
     });
 
-    // Replace cookie with new refresh token
+    /*
+     * Replace the old browser cookie with the new one.
+     */
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -360,7 +441,6 @@ export const refreshAccessToken = async (
     });
   }
 };
-
 //logout
 export const logout = async (
   req: Request,
