@@ -4,6 +4,7 @@ import User from "../models/User.js";
 
 interface JwtPayload{
     userId:string;
+    iat?:number;
 }
 
 export interface AuthenticatedRequest extends Request{
@@ -74,6 +75,19 @@ export const protect=async(
                 message:"Your account has been disabled",
             })
             return;
+        }
+
+        if(user.passwordChangedAt && decoded.iat){
+            const passwordChangedAt=user.passwordChangedAt.getTime();
+            const tokenIssuedAt=decoded.iat *1000;
+
+            if(tokenIssuedAt < passwordChangedAt){
+                res.status(401).json({
+                    success:false,
+                    messsage:"Session is no longer valid.Please log in again.",
+                })
+                return;
+            }
         }
 
         req.user={
