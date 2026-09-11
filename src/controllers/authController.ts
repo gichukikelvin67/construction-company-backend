@@ -10,6 +10,12 @@ import {
 } from "../utils/generateTokens.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import jwt from "jsonwebtoken";
+import { sendPasswordResetEmail } from "../services/emailService.js";
+
+import { generateVerificationToken } from "../utils/generateVerificationToken.js";
+import { sendVerificationEmail } from "../services/emailService.js";
+import { success } from "zod";
+
 
 export const register = async (
   req: Request,
@@ -52,6 +58,11 @@ export const register = async (
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
+    const verificationToken = generateVerificationToken();
+
+const verificationTokenHash = hashToken(
+  verificationToken
+);
 
     const company = await Company.create({
       name: companyName,
@@ -65,11 +76,22 @@ export const register = async (
       password: hashedPassword,
       company: company._id,
       role: "admin",
+
+      emailVerified:false,
+      emailVerificationToken:verificationTokenHash,
+      emailVerificationExpires:new Date(
+        Date.now() +15 *60 *1000
+      ),
     });
+    await sendVerificationEmail(
+  email,
+  name,
+  verificationToken
+);
 
     res.status(201).json({
       success: true,
-      message: "Company and admin account created successfully",
+      message: "Account created successfully.Please check your email to verify your account.",
       user: {
         id: user._id,
         name: user.name,
@@ -480,6 +502,234 @@ export const logout = async (
     res.status(500).json({
       success: false,
       message: "Something went wrong during logout",
+    });
+  }
+};
+
+//VERIFY EMAIL
+export const verifyEmail = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      res.status(400).json({
+        success: false,
+        message: "Verification token is required",
+      });
+
+      return;
+    }
+
+    // Hash the token received from the user
+    const tokenHash = hashToken(token);
+
+    // Find the user using the hashed token
+    const user = await User.findOne({
+      emailVerificationToken: tokenHash,
+    });
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid verification token",
+      });
+
+      return;
+    }
+
+    // Check whether the token has expired
+    if (
+      !user.emailVerificationExpires ||
+      user.emailVerificationExpires < new Date()
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Verification token has expired",
+      });
+
+      return;
+    }
+
+    // Check if the email was already verified
+    if (user.emailVerified) {
+      res.status(400).json({
+        success: false,
+        message: "Email is already verified",
+      });
+
+      return;
+    }
+
+    // Mark email as verified
+    user.emailVerified = true;
+
+    // Delete the verification token
+    user.emailVerificationToken = null;
+    user.emailVerificationExpires = null;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Email verified successfully",
+    });
+  } catch (error) {
+    console.error("Email verification error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Something went wrong during email verification",
+    });
+  }
+};
+
+export const forgotPassword=async(
+    req:Request,
+    res:Response
+):Promise<void> =>{
+    try{
+        const{email}=req.body;
+
+        if (!email){
+            res.status(400).json({
+                success:false,
+                message:"Email is required",
+            })
+            return;
+        }
+
+        const normalizedEmail=email.toLowerCase().trim();
+
+        const user=await User.findOne({
+            email:normalizedEmail,
+        })
+        //Always return same response.
+        //this prevents attacker drom discovering which emails
+        //have accounts in our system.
+
+        if(!user){
+            res.status(200).json({
+               success:true,
+               message:"If an account with that email exists,a password reset link has been sent"
+            })
+            return;
+        }
+        const resetToken=generateVerificationToken();
+        const resetTokenHash=hashToken(resetToken);
+
+        user.passwordResetToken=resetTokenHash;
+        user.passwordResetExpires=new Date(
+            Date.now() + 15 * 60 *1000
+        )
+        await user.save();
+
+        await sendPasswordResetEmail(
+            user.email,
+            user.name,
+            resetToken
+        )
+        res.status(200).json({
+            success:true,
+            message:"If an account with that email exists, a password reset link has been sent.",
+
+        })
+    }catch(error){
+        console.error("Forgot password error:", error);
+
+        res.status(500).json({
+            success:false,
+            message:"Unable to process reset request",
+        })
+    }
+}
+export const resetPassword = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      res.status(400).json({
+        success: false,
+        message: "Token and new password are required",
+      });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters long",
+      });
+      return;
+    }
+
+    const tokenHash = hashToken(token);
+
+    const user = await User.findOne({
+      passwordResetToken: tokenHash,
+    }).select("+password");
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid or expired password reset link",
+      });
+      return;
+    }
+
+    if (
+      !user.passwordResetExpires ||
+      user.passwordResetExpires < new Date()
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid or expired password reset link",
+      });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    user.password = hashedPassword;
+
+    user.passwordResetToken = null;
+    user.passwordResetExpires = null;
+
+    user.passwordChangedAt = new Date();
+
+    await user.save();
+
+    // Destroy all existing login sessions.
+    // This means somebody who already had access to the
+    // account must log in again with the new password.
+    await Session.updateMany(
+      {
+        user: user._id,
+        revokedAt: null,
+      },
+      {
+        $set: {
+          revokedAt: new Date(),
+        },
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      message:
+        "Password reset successfully. Please log in with your new password.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to reset password",
     });
   }
 };
