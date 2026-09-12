@@ -6,6 +6,8 @@ import { protect } from "../middleware/authMiddleware.js";
 
 import { validate } from "../middleware/validate.js";
 
+import { allowRoles } from "../middleware/roleMiddleware.js";
+
 import { createProjectSchema, updateProjectSchema } from "../validators/projectValidators.js";
 
 const router = Router();
@@ -25,6 +27,7 @@ router.get(
 router.patch(
     "/:id",
     protect,
+    allowRoles("admin","project_manager"),
     validate(updateProjectSchema),
     updateProject
 );
@@ -33,6 +36,7 @@ router.patch(
 router.post(
   "/",
   protect,
+  allowRoles("admin","project_manager"),
   validate(createProjectSchema),
   createProject
 );

@@ -4,6 +4,7 @@ import cors from  "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import projectRoutes from "./routes/projectRoutes.js";
+import workerRoutes from "./routes/workerRoutes.js";
 
 const dns=require("dns");
 
@@ -22,6 +23,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/workers", workerRoutes);
 
 app.get("/api/health",(_req,res)=>{
     res.json({
