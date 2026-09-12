@@ -3,6 +3,7 @@ import express from "express";
 import cors from  "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import projectRoutes from "./routes/projectRoutes.js";
 
 const dns=require("dns");
 
@@ -19,7 +20,8 @@ app.use (
 app.use(helmet());
 app.use(express.json());
 app.use(cookieParser());
-
+app.use("/api/auth", authRoutes);
+app.use("/api/projects", projectRoutes);
 
 app.get("/api/health",(_req,res)=>{
     res.json({
