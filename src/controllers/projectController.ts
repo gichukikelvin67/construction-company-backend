@@ -1,6 +1,6 @@
 import {Response}from "express";
 import mongoose from "mongoose";
-import Project from "../models/Projects.js";
+import Project from "../models/Project.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 
 

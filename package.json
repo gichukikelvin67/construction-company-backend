@@ -1,6 +1,7 @@
 {
   "name": "buildtrack-backend",
   "version": "1.0.0",
+  "type":"module",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -11,7 +12,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",

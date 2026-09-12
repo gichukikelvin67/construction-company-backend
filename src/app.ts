@@ -6,7 +6,7 @@ import cookieParser from "cookie-parser";
 import projectRoutes from "./routes/projectRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
 
-const dns=require("dns");
+import dns from "node:dns";
 
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
 
