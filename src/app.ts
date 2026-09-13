@@ -8,6 +8,7 @@ import workerRoutes from "./routes/workerRoutes.js";
 import projectAssignmentRoutes from "./routes/projectAssignmentRoutes.js";
 
 import attendanceRoutes from "./routes/attendanceRoutes.js";
+import expenseRoutes from "./routes/expenseRoutes.js";
 
 import dns from "node:dns";
 
@@ -27,6 +28,7 @@ app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/workers", workerRoutes);
+app.use("/api/expenses", expenseRoutes);
 app.use(
   "/api/project-assignments",
   projectAssignmentRoutes
