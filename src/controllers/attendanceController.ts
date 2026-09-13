@@ -89,7 +89,8 @@ export const createAttendance = async (
 
     // 5. Make sure attendance date is not before assignment started
     const attendanceDate = new Date(date);
-
+     const dateKey = attendanceDate.toISOString().slice(0, 10);
+     
     if (attendanceDate < assignment.startDate) {
       res.status(400).json({
         success: false,
@@ -104,7 +105,7 @@ export const createAttendance = async (
       project: projectId,
       worker: workerId,
       company: req.user.company,
-      date: attendanceDate,
+      dateKey,
     });
 
     if (existingAttendance) {
@@ -122,6 +123,7 @@ export const createAttendance = async (
       worker: workerId,
       company: req.user.company,
       date: attendanceDate,
+      dateKey,
       status,
       dailyRate: assignment.dailyRate,
       notes,

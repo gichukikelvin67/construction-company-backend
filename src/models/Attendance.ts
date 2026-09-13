@@ -12,6 +12,7 @@ export interface IAttendance extends Document {
   company: mongoose.Types.ObjectId;
 
   date: Date;
+  dateKey:string;
   status: AttendanceStatus;
 
   dailyRate: number;
@@ -47,6 +48,12 @@ const attendanceSchema = new Schema<IAttendance>(
       type: Date,
       required: true,
       index: true,
+    },
+
+    dateKey:{
+        type: String,
+        required:true,
+        index:true,
     },
 
     status: {
@@ -100,7 +107,7 @@ attendanceSchema.index(
     company: 1,
     project: 1,
     worker: 1,
-    date: 1,
+    dateKey: 1,
   },
   {
     unique: true,
