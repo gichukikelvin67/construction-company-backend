@@ -88,3 +88,11 @@ export const updateExpenseSchema = z.object({
     .max(500, "Notes are too long")
     .optional(),
 });
+
+export const voidExpenseSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(3, "Void reason is required")
+    .max(500, "Void reason is too long"),
+});

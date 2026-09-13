@@ -24,6 +24,11 @@ export interface IExpense extends Document{
     notes?:string;
 
     recordedBy:mongoose.Types.ObjectId;
+
+    isVoided: boolean;
+voidedAt: Date | null;
+voidedBy: mongoose.Types.ObjectId | null;
+voidReason?: string;
 }
 
 const expenseSchema=new Schema<IExpense>(
@@ -74,6 +79,30 @@ const expenseSchema=new Schema<IExpense>(
             required:true,
             min:0,
         },
+
+
+        isVoided: {
+  type: Boolean,
+  default: false,
+  index: true,
+},
+
+voidedAt: {
+  type: Date,
+  default: null,
+},
+
+voidedBy: {
+  type: Schema.Types.ObjectId,
+  ref: "User",
+  default: null,
+},
+
+voidReason: {
+  type: String,
+  trim: true,
+  maxlength: 500,
+},
 
         expenseDate:{
             type:Date,

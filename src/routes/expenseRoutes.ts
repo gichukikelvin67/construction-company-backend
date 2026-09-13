@@ -4,13 +4,14 @@ import{
     createExpense,
     getProjectExpenses,
     updateExpense,
+    voidExpense,
 }from "../controllers/expenseController.js";
 
 import {protect}from "../middleware/authMiddleware.js";
 import { allowRoles } from "../middleware/roleMiddleware.js";
 import{validate}from "../middleware/validate.js";
 
-import { createExpenseSchema ,updateExpenseSchema} from "../validators/expenseValidators.js";
+import { createExpenseSchema ,updateExpenseSchema,voidExpenseSchema} from "../validators/expenseValidators.js";
 
 
 const router=Router();
@@ -22,7 +23,7 @@ router.get(
 );
 
 router.patch(
-  "/:id",
+  "/:id/",
   protect,
   allowRoles(
     "admin",
@@ -31,6 +32,18 @@ router.patch(
   ),
   validate(updateExpenseSchema),
   updateExpense
+);
+
+router.patch(
+  "/:id/void",
+  protect,
+  allowRoles(
+    "admin",
+    "project_manager",
+    "accountant"
+  ),
+  validate(voidExpenseSchema),
+  voidExpense
 );
 
 router.post(

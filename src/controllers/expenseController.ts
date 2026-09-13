@@ -174,9 +174,10 @@ export const updateExpense = async (
       return;
     }
 
-    const expense = await Expense.findOne({
+    const expense= await Expense.findOne({
       _id: expenseId,
       company: req.user.company,
+      isVoided:false,
     });
 
     if (!expense) {
@@ -233,6 +234,74 @@ export const updateExpense = async (
     res.status(500).json({
       success: false,
       message: "Unable to update expense",
+    });
+  }
+};
+
+export const voidExpense = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const expenseId = req.params.id as string;
+
+    if (!mongoose.Types.ObjectId.isValid(expenseId)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid expense ID",
+      });
+      return;
+    }
+
+    const { reason } = req.body;
+
+    const expense = await Expense.findOne({
+      _id: expenseId,
+      company: req.user.company,
+    });
+
+    if (!expense) {
+      res.status(404).json({
+        success: false,
+        message: "Expense not found",
+      });
+      return;
+    }
+
+    if (expense.isVoided) {
+      res.status(400).json({
+        success: false,
+        message: "Expense has already been voided",
+      });
+      return;
+    }
+
+    expense.isVoided = true;
+    expense.voidedAt = new Date();
+    expense.voidedBy = new mongoose.Types.ObjectId(req.user.id);
+    expense.voidReason = reason;
+
+    await expense.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Expense voided successfully",
+      expense,
+    });
+  } catch (error) {
+    console.error("Void expense error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to void expense",
     });
   }
 };
