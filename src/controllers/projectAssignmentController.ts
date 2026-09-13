@@ -126,3 +126,172 @@ export const createProjectAssignment = async (
     });
   }
 };
+
+
+export const getProjectAssignments = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const projectId = req.params.projectId as string;
+
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid project ID",
+      });
+      return;
+    }
+
+    const project = await Project.findOne({
+      _id: projectId,
+      company: req.user.company,
+    });
+
+    if (!project) {
+      res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+      return;
+    }
+
+    const assignments = await ProjectAssignment.find({
+      project: projectId,
+      company: req.user.company,
+    })
+      .populate("worker", "name phone jobTitle")
+      .populate("assignedBy", "name email")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: assignments.length,
+      assignments,
+    });
+  } catch (error) {
+    console.error(
+      "Get project assignments error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to get project assignments",
+    });
+  }
+};
+
+export const updateProjectAssignment = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const assignmentId = req.params.id as string;
+
+    if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid assignment ID",
+      });
+      return;
+    }
+
+    const assignment = await ProjectAssignment.findOne({
+      _id: assignmentId,
+      company: req.user.company,
+    });
+
+    if (!assignment) {
+      res.status(404).json({
+        success: false,
+        message: "Assignment not found",
+      });
+      return;
+    }
+
+    const { role, dailyRate, endDate, status } = req.body;
+
+    if (endDate) {
+      const newEndDate = new Date(endDate);
+
+      if (newEndDate < assignment.startDate) {
+        res.status(400).json({
+          success: false,
+          message: "End date cannot be before start date",
+        });
+        return;
+      }
+    }
+
+    if (status === "active" && assignment.status !== "active") {
+      const existingActiveAssignment =
+        await ProjectAssignment.findOne({
+          _id: { $ne: assignment._id },
+          project: assignment.project,
+          worker: assignment.worker,
+          company: req.user.company,
+          status: "active",
+        });
+
+      if (existingActiveAssignment) {
+        res.status(409).json({
+          success: false,
+          message:
+            "Worker already has an active assignment on this project",
+        });
+        return;
+      }
+    }
+
+    if (role !== undefined) {
+      assignment.role = role;
+    }
+
+    if (dailyRate !== undefined) {
+      assignment.dailyRate = dailyRate;
+    }
+
+    if (endDate !== undefined) {
+      assignment.endDate = new Date(endDate);
+    }
+
+    if (status !== undefined) {
+      assignment.status = status;
+    }
+
+    await assignment.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Project assignment updated successfully",
+      assignment,
+    });
+  } catch (error) {
+    console.error(
+      "Update project assignment error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to update project assignment",
+    });
+  }
+};

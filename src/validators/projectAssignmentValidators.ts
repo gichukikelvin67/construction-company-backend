@@ -51,3 +51,27 @@ export const createProjectAssignmentSchema = z
       path: ["endDate"],
     }
   );
+
+
+  export const updateProjectAssignmentSchema = z.object({
+  role: z
+    .string()
+    .trim()
+    .min(2, "Assignment role is required")
+    .max(100, "Assignment role is too long")
+    .optional(),
+
+  dailyRate: z
+    .number()
+    .nonnegative("Daily rate cannot be negative")
+    .optional(),
+
+  endDate: z
+    .string()
+    .datetime("Invalid end date")
+    .optional(),
+
+  status: z
+    .enum(["active", "completed", "removed"])
+    .optional(),
+});

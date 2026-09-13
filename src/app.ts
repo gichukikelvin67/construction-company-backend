@@ -5,6 +5,9 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import projectRoutes from "./routes/projectRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
+import projectAssignmentRoutes from "./routes/projectAssignmentRoutes.js";
+
+import attendanceRoutes from "./routes/attendanceRoutes.js";
 
 import dns from "node:dns";
 
@@ -24,6 +27,14 @@ app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/workers", workerRoutes);
+app.use(
+  "/api/project-assignments",
+  projectAssignmentRoutes
+);
+app.use(
+  "/api/attendance",
+  attendanceRoutes
+);
 
 app.get("/api/health",(_req,res)=>{
     res.json({

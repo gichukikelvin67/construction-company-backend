@@ -107,6 +107,20 @@ projectAssignmentSchema.index({
     status:1,
 })
 
+projectAssignmentSchema.index(
+  {
+    company: 1,
+    project: 1,
+    worker: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: "active",
+    },
+  }
+);
+
 const ProjectAssignment=
 mongoose.model<IProjectAssingment>(
     "ProjectAssignment",
