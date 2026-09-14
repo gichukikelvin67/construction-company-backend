@@ -9,6 +9,8 @@ import projectAssignmentRoutes from "./routes/projectAssignmentRoutes.js";
 
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import expenseRoutes from "./routes/expenseRoutes.js";
+import projectFinancialRoutes from "./routes/projectFinancialRoutes.js";
+import budgetRoutes from "./routes/budgetRoutes.js";
 
 import dns from "node:dns";
 
@@ -29,6 +31,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/workers", workerRoutes);
 app.use("/api/expenses", expenseRoutes);
+app.use("/api/budgets", budgetRoutes);
 app.use(
   "/api/project-assignments",
   projectAssignmentRoutes
@@ -36,6 +39,11 @@ app.use(
 app.use(
   "/api/attendance",
   attendanceRoutes
+);
+
+app.use(
+  "/api/financials",
+  projectFinancialRoutes
 );
 
 app.get("/api/health",(_req,res)=>{
