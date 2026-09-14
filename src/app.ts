@@ -12,6 +12,7 @@ import expenseRoutes from "./routes/expenseRoutes.js";
 import projectFinancialRoutes from "./routes/projectFinancialRoutes.js";
 import budgetRoutes from "./routes/budgetRoutes.js";
 import supplierRoutes from "./routes/supplierRoutes.js";
+import materialRoutes from "./routes/materialRoutes.js";
 
 import dns from "node:dns";
 
@@ -34,6 +35,7 @@ app.use("/api/workers", workerRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/suppliers", supplierRoutes);
+app.use("/api/materials", materialRoutes);
 app.use(
   "/api/project-assignments",
   projectAssignmentRoutes
