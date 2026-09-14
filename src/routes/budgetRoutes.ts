@@ -3,6 +3,7 @@ import {Router}from "express";
 import{
     createBudget,
     getProjectBudget,
+    getBudgetAnalysis,
 }from "../controllers/budgetController.js";
 
 import {protect} from "../middleware/authMiddleware.js";
@@ -20,6 +21,12 @@ router.post(
     allowRoles("admin","project_manager","accountant"),
     validate(createBudgetSchema),
     createBudget
+);
+
+router.get(
+  "/project/:projectId/analysis",
+  protect,
+  getBudgetAnalysis
 );
 
 router.get(
