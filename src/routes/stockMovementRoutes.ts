@@ -4,6 +4,7 @@ import{
     createStockMovement,
     getMaterialStock,
     getMaterialMovements,
+    getLowStockMaterials,
 }from "../controllers/stockMovementController.js";
 
 import{protect}from "../middleware/authMiddleware.js";
@@ -24,6 +25,12 @@ router.get(
     "/material/:materialId/stock",
     protect,
     getMaterialStock
+);
+
+router.get(
+    "/low-stock",
+    protect,
+    getLowStockMaterials
 );
 
 router.post(

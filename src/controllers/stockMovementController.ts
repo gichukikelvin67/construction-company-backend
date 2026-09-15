@@ -291,7 +291,25 @@ export const createStockMovement=async(
 
     }
 
-    // check stock before issuing material
+    // Prevent duplicate stock transactions
+    //check stock before issusing material
+
+if (referenceNumber) {
+  const existingMovement = await StockMovement.findOne({
+    company: req.user.company,
+    type,
+    referenceNumber,
+  });
+
+  if (existingMovement) {
+    res.status(409).json({
+      success: false,
+      message: "A stock movement with this reference number already exists",
+      existingMovementId: existingMovement._id,
+    });
+    return;
+  }
+}
     if(type==="issue"){
         const currentStock=await calculateCurrentStock(
             materialId,
@@ -335,6 +353,66 @@ export const createStockMovement=async(
         res.status(500).json({
             success:false,
             message:"Unable to record stock movememt",
+        })
+    }
+}
+
+//Get low stock materials
+
+export const getLowStockMaterials=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void>=>{
+    try{
+        if(!req.user){
+            res.status(401).json({
+                success:false,
+                message:"Authentication required"
+            })
+            return;
+        }
+
+        const materials=await Material.find({
+            company:req.user.company,
+            isActive:true,
+        }).sort({name:1});
+
+        const lowStockMaterials=[];
+        for(const material of materials){
+            const currentStock=await calculateCurrentStock(
+                material._id.toString(),
+                req.user.company
+            )
+
+            if(currentStock<=material.minimumStock){
+                lowStockMaterials.push({
+                    material:{
+                        id:material._id,
+                        name:material.name,
+                        code:material.code,
+                        unit:material.unit,
+                    },
+                    currentStock,
+                    minimumStock:material.minimumStock,
+                    shortage:Math.max(
+                        material.minimumStock-currentStock,
+                        0
+                    )
+                })
+            }
+        }
+
+        res.status(200).json({
+            success:true,
+            count:lowStockMaterials.length,
+            materials:lowStockMaterials,
+        })
+    }catch(error){
+        console.error("Get low stock materials error:",error);
+
+        res.status(500).json({
+            success:false,
+            message:"Unable to get low stock materials",
         })
     }
 }

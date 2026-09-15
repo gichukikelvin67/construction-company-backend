@@ -122,6 +122,16 @@ stockMovementSchema.index({
   movementDate: -1,
 });
 
+stockMovementSchema.index(
+  { company: 1, type: 1, referenceNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      referenceNumber: { $exists: true, $type: "string" },
+    },
+  }
+);
+
 const StockMovement = mongoose.model<IStockMovement>(
   "StockMovement",
   stockMovementSchema
