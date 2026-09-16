@@ -22,6 +22,12 @@ export const createStockMovementSchema = z.object({
     "adjustment",
   ]),
 
+  adjustmentDirection:z
+  .enum([
+    "increase","decrease"
+  ])
+  .optional(),
+
   quantity: z
     .number()
     .positive("Quantity must be greater than zero"),

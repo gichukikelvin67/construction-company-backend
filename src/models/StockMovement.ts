@@ -6,6 +6,9 @@ export type StockMovementType =
   | "return"
   | "adjustment";
 
+
+  export type StockAdjustmentDirection= "increase" | "decrease";
+
 export interface IStockMovement extends Document {
   material: mongoose.Types.ObjectId;
   supplier?: mongoose.Types.ObjectId;
@@ -14,6 +17,8 @@ export interface IStockMovement extends Document {
   company: mongoose.Types.ObjectId;
 
   type: StockMovementType;
+
+  adjustmentDirection?:StockAdjustmentDirection;
   quantity: number;
   unitCost?: number;
 
@@ -63,6 +68,11 @@ const stockMovementSchema = new Schema<IStockMovement>(
       required: true,
       index: true,
     },
+      
+    adjustmentDirection: {
+  type: String,
+  enum: ["increase", "decrease"],
+},
 
     quantity: {
       type: Number,

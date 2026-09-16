@@ -36,7 +36,13 @@ const calculateCurrentStock=async(
         }
 
         if(movement.type==="adjustment"){
-            stock +=movement.quantity;
+            if(movement.adjustmentDirection === "increase"){
+                stock +=movement.quantity;
+            }
+            if(movement.adjustmentDirection ==="decrease"){
+            
+            stock -=movement.quantity;
+            }
         }
     }
     return stock;
@@ -196,6 +202,7 @@ export const createStockMovement=async(
             supplierId,
             projectId,
             type,
+            adjustmentDirection,
             quantity,
             unitCost,
             referenceNumber,
@@ -220,10 +227,20 @@ export const createStockMovement=async(
             return;
         }
         //receipt requires supplier
-        if(type==="receipt"&& !supplierId){
+        if(type==="receipt" && !supplierId){
             res.status(400).json({
                 success:false,
                 message:"A supplier is required for a receipt",
+            })
+            return;
+        }
+
+        //Adjustment requires a direction
+
+        if(type=== "adjustment" && !adjustmentDirection){
+            res.status(400).json({
+                success:false,
+                message:"Adjustment direction is required",
             })
             return;
         }
@@ -333,6 +350,7 @@ if (referenceNumber) {
         project:projectId || undefined,
         company:req.user.company,
         type,
+        adjustmentDirection,
         quantity,
         unitCost,
         referenceNumber,
