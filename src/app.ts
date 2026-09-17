@@ -14,6 +14,7 @@ import budgetRoutes from "./routes/budgetRoutes.js";
 import supplierRoutes from "./routes/supplierRoutes.js";
 import materialRoutes from "./routes/materialRoutes.js";
 import stockMovementRoutes from "./routes/stockMovementRoutes.js";
+import purchaseOrderRoutes from "./routes/purchaseOrderRoutes.js";
 import dns from "node:dns";
 
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
@@ -37,6 +38,7 @@ app.use("/api/budgets", budgetRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/materials", materialRoutes);
 app.use("/api/stock-movements", stockMovementRoutes);
+app.use("/api/purchase-orders", purchaseOrderRoutes);
 app.use(
   "/api/project-assignments",
   projectAssignmentRoutes

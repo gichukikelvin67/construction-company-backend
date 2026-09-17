@@ -32,3 +32,24 @@ export const createPurchaseOrderSchema=z.object({
    .max(1000,"Notes are too long")
    .optional(),
 })
+
+export const receivePurchaseOrderSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        materialId: objectId("material ID"),
+
+        quantity: z
+          .number()
+          .positive("Received quantity must be greater than zero"),
+      })
+    )
+    .min(1, "At least one material is required"),
+
+  notes: z
+    .string()
+    .trim()
+    .max(500, "Notes are too long")
+    .optional(),
+});
+

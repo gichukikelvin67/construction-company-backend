@@ -12,6 +12,7 @@ export type PurchaseOrderStatus=
 export interface IPurchaseOrderItem{
       material: mongoose.Types.ObjectId;
   quantity: number;
+  receivedQuantity:number;
   unitCost: number;
   totalCost: number;
 }
@@ -51,6 +52,13 @@ const purchaseOrderItemSchema=new Schema<IPurchaseOrderItem>(
             min:0,
 
         },
+
+      receivedQuantity: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
 
         unitCost:{
             type:Number,

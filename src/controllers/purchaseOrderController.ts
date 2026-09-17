@@ -95,7 +95,7 @@ export const createPurchaseOrder=async(
         const project=await Project.findOne({
             _id:projectId,
             company:req.user.company,
-            isActive:true,
+            
         })
 
         if(!project){
@@ -172,7 +172,7 @@ export const createPurchaseOrder=async(
 
 //create purchase order
 
-const purchaseOrder=await purchaseOrderItems.create({
+const purchaseOrder=await PurchaseOrder.create({
     poNumber,
     supplier:supplierId,
     project: projectId,
@@ -206,3 +206,297 @@ res.status(201).json({
         })
     }
 }
+
+//Submit a purcahse order for approval
+
+export const submitPurchaseOrder=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void> =>{
+    try{
+        if(!req.user){
+             res.status(401).json({
+                success:false,
+                message:"Authentication required",
+             })
+
+             return;
+        }
+
+        const purchaseOrderId=req.params.id;
+
+        if(typeof purchaseOrderId !== "string"){
+            res.status(400).json({
+                success:false,
+                message:"Invalid purchase order ID",
+            })
+            return;
+        }
+
+        if(!mongoose.Types.ObjectId.isValid(purchaseOrderId)){
+            res.status(400).json({
+                success:false,
+                message:"Invalid purchase order ID",
+            })
+            return;
+        }
+
+        //Find the PO belonging to this company
+
+        const purchaseOrder=await PurchaseOrder.findOne({
+            _id:purchaseOrderId,
+            company:req.user.company,
+        })
+
+        if(!purchaseOrder){
+            res.status(404).json({
+                success:false,
+                message:"Purchase order not found",
+            })
+            return;
+        }
+
+        //A PO can only be submmitted frpm draft
+
+        if(purchaseOrder.status !== "draft"){
+            res.status(400).json({
+                success:false,
+                message:`Purchase order cannot be submitted because its current status is "${purchaseOrder.status}"`,
+
+            })
+            return;
+        }
+        //Change Status
+        purchaseOrder.status="pending_approval";
+
+        await purchaseOrder.save();
+
+        res.status(200).json({
+            success:true,
+            message:"Purchase order submitted for approval",
+            purchaseOrder,
+        })
+    
+    }catch(error){
+        console.error("Submit purchase order error:",error);
+
+        res.status(500).json({
+            success:false,
+            message:"Failed to submit purchase order",
+        })
+    }
+}
+
+//get all purcahse order for the users company
+
+export const getPurchaseOrders=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void>=>{
+    try{
+        if(!req.user){
+            res.status(400).json({
+                success:false,
+                message:"Authentication required",
+            })
+
+            return;
+        }
+
+        const purchaseOrders=await PurchaseOrder.find({
+            company:req.user.company,
+        })
+        .populate("supplier", "name phone email")
+        .populate("project", "name location")
+        .populate("requestedBy", "name email role" )
+        .populate("approvedBy", "name email role")
+        .sort({createdAt: -1});
+
+        res.status(200).json({
+            success:true,
+            count: purchaseOrders.length,
+            purchaseOrders,
+        })
+    }catch(error){
+        console.error("Get purchase orders error:",error)
+
+        res.status(500).json({
+            success:false,
+            message:"Failed to retrieve purchase orders"
+        })
+    }
+}
+
+//approve purchase order
+
+export const approvePurchaseOrder=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void>=>{
+    try{
+    if(!req.user){
+        res.status(401).json({
+            success:false,
+            message:"Authentication required",
+        })
+        return;
+    }
+
+    const purchaseOrderId=req.params.id;
+
+    if(typeof purchaseOrderId  !=="string"){
+        res.status(400).json({
+            success:false,
+            message:"Invalid purchase order ID",
+        })
+        return;
+    }
+
+    if(!mongoose.Types.ObjectId.isValid(purchaseOrderId)){
+        res.status(400).json({
+            success:false,
+            message:"Invalid purchase order ID",
+        })
+
+        return;
+    }
+
+    const purchaseOrder=await PurchaseOrder.findOne({
+        _id: purchaseOrderId,
+        company:req.user.company,
+    })
+    if(!purchaseOrder){
+        res.status(404).json({
+            success:false,
+            message:"Purchase order not found",
+        })
+        return;
+    }
+
+    //A po can only be approved when pending approval
+
+    if(purchaseOrder.status !== "pending_approval"){
+        res.status(400).json({
+            success:false,
+            message:`Purchase order cannot be approved because its current status is "${purchaseOrder.status}"`,
+
+        })
+        return;
+    }
+
+    //Record approva information
+
+    purchaseOrder.status="approved";
+    purchaseOrder.approvedBy=new mongoose.Types.ObjectId(
+        req.user.id
+    )
+
+    purchaseOrder.approvedAt=new Date();
+    await purchaseOrder.save();
+
+    res.status(200).json({
+        success:true,
+        message:"Purchase order approved successfully",
+        purchaseOrder,
+    });
+
+} catch (error){
+    console.error("Approve purchase order error:",error);
+
+    res.status(500).json({
+        success:false,
+        message:"Failed to approve purchase order",
+    });
+
+}
+};
+
+// Reject a purchase order
+export const rejectPurchaseOrder = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const purchaseOrderId = req.params.id;
+
+    if (typeof purchaseOrderId !== "string") {
+      res.status(400).json({
+        success: false,
+        message: "Invalid purchase order ID",
+      });
+      return;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(purchaseOrderId)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid purchase order ID",
+      });
+      return;
+    }
+
+    const { reason } = req.body;
+
+    if (
+      typeof reason !== "string" ||
+      reason.trim().length < 3
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Rejection reason is required",
+      });
+      return;
+    }
+
+    const purchaseOrder = await PurchaseOrder.findOne({
+      _id: purchaseOrderId,
+      company: req.user.company,
+    });
+
+    if (!purchaseOrder) {
+      res.status(404).json({
+        success: false,
+        message: "Purchase order not found",
+      });
+      return;
+    }
+
+    // A PO can only be rejected when pending approval
+    if (purchaseOrder.status !== "pending_approval") {
+      res.status(400).json({
+        success: false,
+        message: `Purchase order cannot be rejected because its current status is "${purchaseOrder.status}"`,
+      });
+      return;
+    }
+
+    purchaseOrder.status = "rejected";
+    purchaseOrder.rejectionReason = reason.trim();
+
+    await purchaseOrder.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Purchase order rejected",
+      purchaseOrder,
+    });
+  } catch (error) {
+    console.error(
+      "Reject purchase order error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to reject purchase order",
+    });
+  }
+};
