@@ -6,6 +6,7 @@ import PurchaseOrder from "../models/PurchaseOrder.js";
 import Supplier from "../models/Supplier.js";
 import Project from "../models/Project.js";
 import Material  from "../models/Material.js";
+import StockMovement from "../models/StockMovement.js";
 
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 
@@ -499,4 +500,180 @@ export const rejectPurchaseOrder = async (
       message: "Failed to reject purchase order",
     });
   }
+};
+
+// Receive materials from an approved purchase order
+
+export const receivePurchaseOrder = async (
+    req: AuthenticatedRequest,
+    res: Response
+): Promise<void> => {
+    try {
+        if (!req.user) {
+            res.status(401).json({
+                success: false,
+                message: "Authentication required",
+            });
+
+            return;
+        }
+
+        const purchaseOrderId = req.params.id;
+
+        if (typeof purchaseOrderId !== "string") {
+            res.status(400).json({
+                success: false,
+                message: "Invalid purchase order ID",
+            });
+
+            return;
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(purchaseOrderId)) {
+            res.status(400).json({
+                success: false,
+                message: "Invalid purchase order ID",
+            });
+
+            return;
+        }
+
+        const { items, notes } = req.body;
+
+        // Find the purchase order
+        const purchaseOrder = await PurchaseOrder.findOne({
+            _id: purchaseOrderId,
+            company: req.user.company,
+        });
+
+        if (!purchaseOrder) {
+            res.status(404).json({
+                success: false,
+                message: "Purchase order not found",
+            });
+
+            return;
+        }
+
+        // Only approved or partially received POs can receive materials
+        if (
+            purchaseOrder.status !== "approved" &&
+            purchaseOrder.status !== "partially_received"
+        ) {
+            res.status(400).json({
+                success: false,
+                message: `Materials cannot be received because the purchase order status is "${purchaseOrder.status}"`,
+            });
+
+            return;
+        }
+
+        // Make sure every received material exists on the PO
+        for (const receivedItem of items) {
+            const poItem = purchaseOrder.items.find(
+                (item) =>
+                    item.material.toString() ===
+                    receivedItem.materialId
+            );
+
+            if (!poItem) {
+                res.status(400).json({
+                    success: false,
+                    message: `Material ${receivedItem.materialId} is not part of this purchase order`,
+                });
+
+                return;
+            }
+
+            const remainingQuantity =
+                poItem.quantity - poItem.receivedQuantity;
+
+            if (receivedItem.quantity > remainingQuantity) {
+                res.status(400).json({
+                    success: false,
+                    message:
+                        `Cannot receive ${receivedItem.quantity}. ` +
+                        `Only ${remainingQuantity} remaining for this material.`,
+                });
+
+                return;
+            }
+        }
+
+        // Create stock receipts
+        for (const receivedItem of items) {
+            const poItem = purchaseOrder.items.find(
+                (item) =>
+                    item.material.toString() ===
+                    receivedItem.materialId
+            );
+
+            if (!poItem) {
+                continue;
+            }
+
+            // Update received quantity
+            poItem.receivedQuantity += receivedItem.quantity;
+
+            // Create inventory receipt
+            await StockMovement.create({
+                material: receivedItem.materialId,
+
+                supplier: purchaseOrder.supplier,
+
+                project: purchaseOrder.project,
+
+                company: req.user.company,
+
+                type: "receipt",
+
+                quantity: receivedItem.quantity,
+
+                unitCost: poItem.unitCost,
+
+                referenceNumber: `${purchaseOrder.poNumber}-RECEIPT`,
+
+                notes:
+                    notes ||
+                    `Receipt for ${purchaseOrder.poNumber}`,
+
+                movementDate: new Date(),
+
+                createdBy: req.user.id,
+            });
+        }
+
+        // Determine whether everything has been received
+        const fullyReceived = purchaseOrder.items.every(
+            (item) =>
+                item.receivedQuantity >= item.quantity
+        );
+
+        if (fullyReceived) {
+            purchaseOrder.status = "received";
+        } else {
+            purchaseOrder.status = "partially_received";
+        }
+
+        await purchaseOrder.save();
+
+        res.status(200).json({
+            success: true,
+            message: fullyReceived
+                ? "Purchase order fully received"
+                : "Purchase order partially received",
+            purchaseOrder,
+        });
+
+    } catch (error) {
+        console.error(
+            "Receive purchase order error:",
+            error
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to receive purchase order",
+        });
+    }
 };
