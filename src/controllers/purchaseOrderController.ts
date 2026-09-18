@@ -366,6 +366,14 @@ export const approvePurchaseOrder=async(
         _id: purchaseOrderId,
         company:req.user.company,
     })
+
+    if(purchaseOrder?.requestedBy.toString()===req.user.id){
+        res.status(403).json({
+            success:false,
+            message:"You cannot approve your own purchase order",
+        })
+        return;
+    }
     if(!purchaseOrder){
         res.status(404).json({
             success:false,
@@ -508,6 +516,7 @@ export const receivePurchaseOrder = async (
     req: AuthenticatedRequest,
     res: Response
 ): Promise<void> => {
+    const session=await mongoose.startSession();
     try {
         if (!req.user) {
             res.status(401).json({
@@ -544,9 +553,11 @@ export const receivePurchaseOrder = async (
         const purchaseOrder = await PurchaseOrder.findOne({
             _id: purchaseOrderId,
             company: req.user.company,
-        });
+        }).session(session);
 
         if (!purchaseOrder) {
+            await session.abortTransaction();
+
             res.status(404).json({
                 success: false,
                 message: "Purchase order not found",
@@ -560,6 +571,7 @@ export const receivePurchaseOrder = async (
             purchaseOrder.status !== "approved" &&
             purchaseOrder.status !== "partially_received"
         ) {
+            await session.abortTransaction();
             res.status(400).json({
                 success: false,
                 message: `Materials cannot be received because the purchase order status is "${purchaseOrder.status}"`,
@@ -569,30 +581,51 @@ export const receivePurchaseOrder = async (
         }
 
         // Make sure every received material exists on the PO
+        //combine duplicate material entires from the request
+
+        const requestedQuantities=new Map<string,number>();
+
         for (const receivedItem of items) {
+
+            const currentQuantity=
+            requestedQuantities.get(receivedItem.materialId)|| 0;
+
+            requestedQuantities.set(
+                receivedItem.materialId,
+                currentQuantity + receivedItem.quantity
+            )
+        }
+
+        for(const[materialId,requestedQuantity]of requestedQuantities){
             const poItem = purchaseOrder.items.find(
                 (item) =>
                     item.material.toString() ===
-                    receivedItem.materialId
+                    materialId
             );
 
             if (!poItem) {
+                await session.abortTransaction();
+
                 res.status(400).json({
                     success: false,
-                    message: `Material ${receivedItem.materialId} is not part of this purchase order`,
+                    message: `Material ${materialId} is not part of this purchase order`,
                 });
 
                 return;
             }
 
-            const remainingQuantity =
-                poItem.quantity - poItem.receivedQuantity;
+            const receivedQuantity=poItem.receivedQuantity || 0;
 
-            if (receivedItem.quantity > remainingQuantity) {
+            const remainingQuantity =
+                poItem.quantity - receivedQuantity;
+
+            if (requestedQuantity > remainingQuantity) {
+                await session.abortTransaction();
+
                 res.status(400).json({
                     success: false,
                     message:
-                        `Cannot receive ${receivedItem.quantity}. ` +
+                        `Cannot receive ${requestedQuantity}. ` +
                         `Only ${remainingQuantity} remaining for this material.`,
                 });
 
@@ -600,80 +633,246 @@ export const receivePurchaseOrder = async (
             }
         }
 
-        // Create stock receipts
-        for (const receivedItem of items) {
-            const poItem = purchaseOrder.items.find(
-                (item) =>
-                    item.material.toString() ===
-                    receivedItem.materialId
-            );
+         // Update PO quantities
+    for (const [materialId, requestedQuantity] of requestedQuantities) {
+      const poItem = purchaseOrder.items.find(
+        (item) => item.material.toString() === materialId
+      );
 
-            if (!poItem) {
-                continue;
-            }
+      if (!poItem) {
+        continue;
+      }
 
-            // Update received quantity
-            poItem.receivedQuantity += receivedItem.quantity;
+      poItem.receivedQuantity =
+        (poItem.receivedQuantity || 0) + requestedQuantity;
+    }
 
-            // Create inventory receipt
-            await StockMovement.create({
-                material: receivedItem.materialId,
+    // Create stock movements
+    for (const [materialId, requestedQuantity] of requestedQuantities) {
+      const poItem = purchaseOrder.items.find(
+        (item) => item.material.toString() === materialId
+      );
 
-                supplier: purchaseOrder.supplier,
+      if (!poItem) {
+        continue;
+      }
 
-                project: purchaseOrder.project,
+      const receiptReference =
+        `${purchaseOrder.poNumber}-RECEIPT-${new mongoose.Types.ObjectId().toString()}`;
 
-                company: req.user.company,
+      await StockMovement.create(
+        [
+          {
+            material: materialId,
+            supplier: purchaseOrder.supplier,
+            project: purchaseOrder.project,
+            company: req.user.company,
+            type: "receipt",
+            quantity: requestedQuantity,
+            unitCost: poItem.unitCost,
+            referenceNumber: receiptReference,
+            notes:
+              notes ||
+              `Receipt for ${purchaseOrder.poNumber}`,
+            movementDate: new Date(),
+            createdBy: req.user.id,
+          },
+        ],
+        { session }
+      );
+    }
 
-                type: "receipt",
+    // Determine whether everything has been received
+    const fullyReceived = purchaseOrder.items.every(
+      (item) =>
+        (item.receivedQuantity || 0) >= item.quantity
+    );
 
-                quantity: receivedItem.quantity,
+    purchaseOrder.status = fullyReceived
+      ? "received"
+      : "partially_received";
 
-                unitCost: poItem.unitCost,
+    // Save the PO inside the transaction
+    await purchaseOrder.save({ session });
 
-                referenceNumber: `${purchaseOrder.poNumber}-RECEIPT`,
+    // Everything succeeded
+    await session.commitTransaction();
 
-                notes:
-                    notes ||
-                    `Receipt for ${purchaseOrder.poNumber}`,
+    res.status(200).json({
+      success: true,
+      message: fullyReceived
+        ? "Purchase order fully received"
+        : "Purchase order partially received",
+      purchaseOrder,
+    });
+  } catch (error) {
+    await session.abortTransaction();
 
-                movementDate: new Date(),
+    console.error(
+      "Receive purchase order error:",
+      error
+    );
 
-                createdBy: req.user.id,
-            });
+    res.status(500).json({
+      success: false,
+      message: "Failed to receive purchase order",
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+export const getPurchaseOrderById = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const id  = req.params.id;
+
+    if (typeof id !== "string") {
+      res.status(400).json({
+        success: false,
+        message: "Invalid purchase order ID",
+      });
+      return;
+    }
+
+    if(!mongoose.Types.ObjectId.isValid(id)){
+        res.status(400).json({
+            success:false,
+            message:"Invalid purchase order ID",
+        })
+        return;
+    }
+
+    const purchaseOrder = await PurchaseOrder.findOne({
+      _id: id,
+      company: req.user.company,
+    })
+      .populate("supplier", "name phone email address contactPerson")
+      .populate("project", "name location clientName status")
+      .populate("requestedBy", "name email role")
+      .populate("approvedBy", "name email role")
+      .populate("items.material", "name code unit");
+
+    if (!purchaseOrder) {
+      res.status(404).json({
+        success: false,
+        message: "Purchase order not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      purchaseOrder,
+    });
+  } catch (error) {
+    console.error("Get purchase order error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve purchase order",
+    });
+  }
+};
+
+export const cancelPurchaseOrder=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void> =>{
+    try{
+        if(!req.user){
+            res.status(400).json({
+                success:false,
+                message:"Authentication required",
+            })
+            return;
         }
 
-        // Determine whether everything has been received
-        const fullyReceived = purchaseOrder.items.every(
-            (item) =>
-                item.receivedQuantity >= item.quantity
-        );
+        const {id}=req.params;
 
-        if (fullyReceived) {
-            purchaseOrder.status = "received";
-        } else {
-            purchaseOrder.status = "partially_received";
+        if(typeof id !=="string"){
+            res.status(400).json({
+                success:false,
+                message:"Invalid purchase order ID",
+            })
+            return;
         }
+
+        if(!mongoose.Types.ObjectId.isValid(id)){
+            res.status(400).json({
+                success:false,
+                message:"Invalid purchase order ID",
+            })
+
+            return;
+        }
+
+        const purchaseOrder=await PurchaseOrder.findOne({
+            _id:id,
+            company:req.user.company,
+        })
+
+        if(!purchaseOrder){
+            res.status(404).json({
+                success:false,
+                message:"Purchase order not found",
+            })
+            return;
+        }
+
+        if(purchaseOrder.status==="received"){
+            res.status(400).json({
+                success:false,
+                message:"A fully received purchase order cannot be cancelled",
+            })
+            return;
+        }
+
+        if(purchaseOrder.status ==="cancelled"){
+            res.status(400).json({
+                success:false,
+                message:"Purchase order is already cancelled",
+            })
+
+            return;
+        }
+
+        const {reason}=req.body;
+
+          const previousStatus = purchaseOrder.status;
+        purchaseOrder.status="cancelled";
+        purchaseOrder.cancelledBy=new mongoose.Types.ObjectId(req.user.id);
+        purchaseOrder.cancelledAt=new Date();
+        purchaseOrder.cancellationReason=reason;
 
         await purchaseOrder.save();
 
-        res.status(200).json({
-            success: true,
-            message: fullyReceived
-                ? "Purchase order fully received"
-                : "Purchase order partially received",
-            purchaseOrder,
-        });
 
-    } catch (error) {
-        console.error(
-            "Receive purchase order error:",
-            error
-        );
+        const  message=
+        previousStatus==="partially_received"
+        ? "purchase order canceeled .Already received materials remain in stock."
+        : "Purchase order cancelled successfully";
+
+        res.status(200).json({
+            success:true,
+            message,
+            PurchaseOrder,
+        })
+    }catch(error){
+        console.error("Cancel purchsase order error:",error);
 
         res.status(500).json({
-            success: false,
-            message: "Failed to receive purchase order",
-        });
+            success:false,
+            message:"Failed to cancel purchase order",
+        })
     }
-};
+}

@@ -53,3 +53,19 @@ export const receivePurchaseOrderSchema = z.object({
     .optional(),
 });
 
+export const rejectPurchaseOrderSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, "Rejection reason must be at least 5 characters")
+    .max(500, "Rejection reason is too long"),
+});
+
+export const cancelPurchaseOrderSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, "Cancellation reason must be at least 5 characters")
+    .max(500, "Cancellation reason is too long"),
+});
+

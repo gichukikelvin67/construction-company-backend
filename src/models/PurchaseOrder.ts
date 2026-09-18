@@ -23,6 +23,10 @@ export interface IPurchaseOrder extends Document{
     project:mongoose.Types.ObjectId;
     company:mongoose.Types.ObjectId;
 
+cancelledBy?: mongoose.Types.ObjectId;
+cancelledAt?: Date;
+cancellationReason?: string;
+
     items:IPurchaseOrderItem[];
 
     subtotal:number;
@@ -165,11 +169,27 @@ const purchaseOrderSchema=new Schema<IPurchaseOrder>(
             maxlength:500,
         },
 
+
+        cancelledBy: {
+  type: Schema.Types.ObjectId,
+  ref: "User",
+},
+cancelledAt: {
+  type: Date,
+},
+cancellationReason: {
+  type: String,
+  trim: true,
+  maxlength: 500,
+},
+
         notes:{
             type:String,
             trim:true,
             maxLength:1000,
         },
+
+
     },
     {
         timestamps:true,

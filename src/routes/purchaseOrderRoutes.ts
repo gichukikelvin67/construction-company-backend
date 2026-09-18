@@ -1,6 +1,14 @@
 import {Router}from "express";
 
-import{createPurchaseOrder,submitPurchaseOrder,getPurchaseOrders,approvePurchaseOrder,rejectPurchaseOrder}from "../controllers/purchaseOrderController.js";
+import{createPurchaseOrder,
+  submitPurchaseOrder,
+  getPurchaseOrders,
+  getPurchaseOrderById,
+  approvePurchaseOrder,
+  rejectPurchaseOrder,
+  receivePurchaseOrder,
+  cancelPurchaseOrder,
+}from "../controllers/purchaseOrderController.js";
 
 import{protect}from "../middleware/authMiddleware.js"
 import { allowRoles } from "../middleware/roleMiddleware.js";
@@ -9,6 +17,9 @@ import{validate}from "../middleware/validate.js";
 
 import{
     createPurchaseOrderSchema,
+    receivePurchaseOrderSchema,
+    rejectPurchaseOrderSchema,
+    cancelPurchaseOrderSchema,
 }from"../validators/purchaseOrderValidators.js"
 
 const router=Router();
@@ -44,6 +55,12 @@ router.get(
   getPurchaseOrders
 );
 
+router.get(
+  "/:id",
+  protect,
+  getPurchaseOrderById
+);
+
 router.patch(
   "/:id/approve",
   protect,
@@ -55,7 +72,24 @@ router.patch(
   "/:id/reject",
   protect,
   allowRoles("admin", "accountant"),
+  validate(rejectPurchaseOrderSchema),
   rejectPurchaseOrder
+);
+
+router.patch(
+  "/:id/cancel",
+  protect,
+  allowRoles("admin", "project_manager"),
+  validate(cancelPurchaseOrderSchema),
+  cancelPurchaseOrder
+);
+
+router.patch(
+  "/:id/receive",
+  protect,
+  allowRoles("admin", "storekeeper"),
+  validate(receivePurchaseOrderSchema),
+  receivePurchaseOrder
 );
 
 
