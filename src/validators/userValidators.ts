@@ -40,3 +40,37 @@ export const updateUserRoleSchema = z.object({
     "storekeeper",
   ]),
 });
+
+export const updateUserProfileSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2, "Name must be at least 2 characters")
+      .max(150, "Name is too long")
+      .optional(),
+
+    email: z
+      .string()
+      .trim()
+      .email("Invalid email address")
+      .max(150, "Email is too long")
+      .optional(),
+
+    phone: z
+      .string()
+      .trim()
+      .min(7, "Phone number is too short")
+      .max(20, "Phone number is too long")
+      .optional(),
+  })
+  .refine(
+    (data) =>
+      data.name !== undefined ||
+      data.email !== undefined ||
+      data.phone !== undefined,
+    {
+      message: "At least one field must be provided",
+      path: ["name"],
+    }
+  );

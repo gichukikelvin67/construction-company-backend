@@ -325,3 +325,87 @@ export const getUserById=async(
         })
     }
 }
+export const updateUserProfile=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void> =>{
+    try{
+        if(!req.user){
+            res.status(401).json({
+                success:false,
+                message:"Authentication required",
+            })
+            return;
+        }
+        const userId=req.params.id;
+        if(typeof userId !== "string"){
+            res.status(400).json({
+                success:false,
+                message:"Invalid user ID",
+            })
+            return;
+        }
+        if(!mongoose.Types.ObjectId.isValid(userId)){
+            res.status(400).json({
+                success:false,
+                message:"Invalid user ID",
+            })
+            return;
+        }
+        const{name, email,phone}=req.body;
+        const user=await User.findOne({
+            _id: userId,
+            company:req.user.company,
+        })
+        if(!user){
+            res.status(404).json({
+                success:false,
+                message:"User not found",
+            })
+            return;
+        }
+        //Check whether new email belongs to another user
+        if(email !==undefined){
+            const normalizedEmail=email.toLowerCase();
+            const existingUser=await User.findOne({
+                email:normalizedEmail,
+                _id:{$ne:userId},
+            })
+            if(existingUser){
+                res.status(409).json({
+                    success:false,
+                    message:"A user with email already exists",
+                })
+                return;
+            }
+            user.email=normalizedEmail;
+        }
+
+        if(name !==undefined){
+            user.name=name;
+        }
+        if(phone !==undefined){
+            user.phone=phone;
+        }
+        await user.save();
+        res.status(200).json({
+            success:true,
+            message:"User profile updated successfully",
+            user:{
+                id:user._id,
+                name:user.name,
+                email:user.email,
+                phone:user.phone,
+                role:user.role,
+                isActive:user.isActive,
+                emailVerified:user.emailVerified,
+            },
+        })
+    }catch(error){
+        console.error("Update user profile error:",error);
+        res.status(500).json({
+            success:false,
+            message:"Failed to update user profile",
+        })
+    }
+}
