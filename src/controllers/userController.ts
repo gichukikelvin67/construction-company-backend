@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 
 import User from "../models/User.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
+import { createAuditLog } from "../utils/auditLogger.js";
 
 export const createUser=async(
     req:AuthenticatedRequest,
@@ -51,6 +52,14 @@ export const createUser=async(
             isActive:true,
             emailVerified:false,
         })
+        await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "create",
+  resource: "user",
+  resourceId: user._id.toString(),
+  description: `Created user ${user.name} with role ${user.role}`,
+});
         res.status(201).json({
             success:true,
             message:"User created successfully",
@@ -159,10 +168,24 @@ export const updateUserStatus = async (
       });
       return;
     }
-
+     const previousStatus=user.isActive;
     user.isActive = !user.isActive;
 
     await user.save();
+    await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: user.isActive ? "activate" : "deactivate",
+  resource: "user",
+  resourceId: user._id.toString(),
+  description: user.isActive
+    ? `Activated user ${user.name}`
+    : `Deactivated user ${user.name}`,
+  metadata: {
+    previousStatus,
+    newStatus: user.isActive,
+  },
+});
 
     res.status(200).json({
       success: true,
@@ -241,10 +264,23 @@ export const updateUserRole = async (
     }
 
     const { role } = req.body;
-
+    const previousRole=user.role;
     user.role = role;
-
     await user.save();
+
+
+await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "update",
+  resource: "user",
+  resourceId: user._id.toString(),
+  description: `Changed ${user.name}'s role from ${previousRole} to ${user.role}`,
+  metadata: {
+    previousRole,
+    newRole: user.role,
+  },
+});
 
     res.status(200).json({
       success: true,
@@ -388,6 +424,7 @@ export const updateUserProfile=async(
             user.phone=phone;
         }
         await user.save();
+
         res.status(200).json({
             success:true,
             message:"User profile updated successfully",

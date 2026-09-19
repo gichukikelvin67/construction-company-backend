@@ -10,6 +10,7 @@ import StockMovement from "../models/StockMovement.js";
 import Counter from "../models/Counter.js";
 
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
+import { createAuditLog } from "../utils/auditLogger.js";
 
 
 //Generate the next purchase order number
@@ -186,16 +187,30 @@ const purchaseOrder=await PurchaseOrder.create({
     project: projectId,
     company:req.user.company,
 
-    items:purchaseOrderItems,
+    items,
 
     subtotal,
-    totalAmount,
+    totalAmount:subtotal,
 
     status:"draft",
 
     requestedBy:req.user.id,
     notes,
 })
+
+await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "create",
+  resource: "purchase_order",
+  resourceId: purchaseOrder._id.toString(),
+  description: `Created purchase order ${purchaseOrder.poNumber}`,
+  metadata: {
+    totalAmount: purchaseOrder.totalAmount,
+    supplierId: purchaseOrder.supplier.toString(),
+    projectId: purchaseOrder.project.toString(),
+  },
+});
 
 //return result
 
@@ -278,6 +293,18 @@ export const submitPurchaseOrder=async(
         purchaseOrder.status="pending_approval";
 
         await purchaseOrder.save();
+        await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "update",
+  resource: "purchase_order",
+  resourceId: purchaseOrder._id.toString(),
+  description: `Submitted purchase order ${purchaseOrder.poNumber} for approval`,
+  metadata: {
+    previousStatus: "draft",
+    newStatus: "pending_approval",
+  },
+});
 
         res.status(200).json({
             success:true,
@@ -409,6 +436,19 @@ export const approvePurchaseOrder=async(
 
     purchaseOrder.approvedAt=new Date();
     await purchaseOrder.save();
+    await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "approve",
+  resource: "purchase_order",
+  resourceId: purchaseOrder._id.toString(),
+  description: `Approved purchase order ${purchaseOrder.poNumber}`,
+  metadata: {
+    totalAmount: purchaseOrder.totalAmount,
+    supplierId: purchaseOrder.supplier.toString(),
+    projectId: purchaseOrder.project.toString(),
+  },
+});
 
     res.status(200).json({
         success:true,
@@ -498,6 +538,19 @@ export const rejectPurchaseOrder = async (
     purchaseOrder.rejectionReason = reason.trim();
 
     await purchaseOrder.save();
+
+    await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "reject",
+  resource: "purchase_order",
+  resourceId: purchaseOrder._id.toString(),
+  description: `Rejected purchase order ${purchaseOrder.poNumber}`,
+  metadata: {
+    totalAmount: purchaseOrder.totalAmount,
+    rejectionReason: purchaseOrder.rejectionReason,
+  },
+});
 
     res.status(200).json({
       success: true,
@@ -707,6 +760,26 @@ export const receivePurchaseOrder = async (
     // Everything succeeded
     await session.commitTransaction();
 
+    await session.commitTransaction();
+
+await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "receive",
+  resource: "purchase_order",
+  resourceId: purchaseOrder._id.toString(),
+  description: `Received materials for purchase order ${purchaseOrder.poNumber}`,
+  metadata: {
+    status: purchaseOrder.status,
+    items: Array.from(requestedQuantities.entries()).map(
+      ([materialId, quantity]) => ({
+        materialId,
+        quantity,
+      })
+    ),
+  },
+});
+
     res.status(200).json({
       success: true,
       message: fullyReceived
@@ -868,6 +941,21 @@ export const cancelPurchaseOrder=async(
         purchaseOrder.cancellationReason=reason;
 
         await purchaseOrder.save();
+
+        await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "cancel",
+  resource: "purchase_order",
+  resourceId: purchaseOrder._id.toString(),
+  description: `Cancelled purchase order ${purchaseOrder.poNumber}`,
+  metadata: {
+    previousStatus,
+    newStatus: "cancelled",
+    cancellationReason: purchaseOrder.cancellationReason,
+    totalAmount: purchaseOrder.totalAmount,
+  },
+});
 
 
         const  message=
