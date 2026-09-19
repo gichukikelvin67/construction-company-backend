@@ -7,6 +7,7 @@ import Supplier from "../models/Supplier.js";
 import Project from "../models/Project.js";
 import Material  from "../models/Material.js";
 import StockMovement from "../models/StockMovement.js";
+import Counter from "../models/Counter.js";
 
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 
@@ -14,23 +15,29 @@ import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 //Generate the next purchase order number
 
 const generatePONumber=async (companyId:string): Promise<string>=>{
-    const latestPO=await PurchaseOrder.findOne({
-        company:companyId,
+    const counter=await Counter.findOneAndUpdate({
+        company: new mongoose.Types.ObjectId(companyId),
+        name:"purchase_order",
 
-    }).sort({createdAt: -1});
+    },
+       {
+        $inc:{sequence:1},
+        $setOnInsert:{
+            company:new mongoose.Types.ObjectId(companyId),
+            name:"purchase_order",
+        },
+       },
+       {
+        new:true,
+        upsert:true,
+       }
+    );
 
-    if(!latestPO){
-        return "PO-0001";
+    if(!counter){
+        throw new Error("Failed to generate purchase order number");
     }
 
-    const lastNumber=parseInt(
-        latestPO.poNumber.replace("PO-",""),
-        10
-    )
-
-    const nextNumber=lastNumber +1;
-
-    return `PO-${nextNumber.toString().padStart(4,"0")}`
+     return`PO-${counter.sequence.toString().padStart(4, "0")}`
 }
 
 //create purchase order
@@ -518,6 +525,8 @@ export const receivePurchaseOrder = async (
 ): Promise<void> => {
     const session=await mongoose.startSession();
     try {
+
+        session.startTransaction();
         if (!req.user) {
             res.status(401).json({
                 success: false,
@@ -706,8 +715,9 @@ export const receivePurchaseOrder = async (
       purchaseOrder,
     });
   } catch (error) {
+    if(session.inTransaction()){
     await session.abortTransaction();
-
+    }
     console.error(
       "Receive purchase order error:",
       error
@@ -715,7 +725,10 @@ export const receivePurchaseOrder = async (
 
     res.status(500).json({
       success: false,
-      message: "Failed to receive purchase order",
+      message:
+      error instanceof Error
+      ?error.message
+      :"Failed to receive purchase order",
     });
   } finally {
     await session.endSession();
@@ -876,3 +889,197 @@ export const cancelPurchaseOrder=async(
         })
     }
 }
+export const updatePurchaseOrder = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const purchaseOrderId = req.params.id;
+
+    if (typeof purchaseOrderId !== "string") {
+      res.status(400).json({
+        success: false,
+        message: "Invalid purchase order ID",
+      });
+      return;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(purchaseOrderId)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid purchase order ID",
+      });
+      return;
+    }
+
+    const { supplierId, projectId, items, notes } = req.body;
+
+    const purchaseOrder = await PurchaseOrder.findOne({
+      _id: purchaseOrderId,
+      company: req.user.company,
+    });
+
+    if (!purchaseOrder) {
+      res.status(404).json({
+        success: false,
+        message: "Purchase order not found",
+      });
+      return;
+    }
+
+    if (purchaseOrder.status !== "draft") {
+      res.status(400).json({
+        success: false,
+        message:
+          `Only draft purchase orders can be edited. ` +
+          `This purchase order is currently "${purchaseOrder.status}".`,
+      });
+      return;
+    }
+
+    // Update supplier if provided
+    if (supplierId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(supplierId)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid supplier ID",
+        });
+        return;
+      }
+
+      const supplier = await Supplier.findOne({
+        _id: supplierId,
+        company: req.user.company,
+        isActive: true,
+      });
+
+      if (!supplier) {
+        res.status(400).json({
+          success: false,
+          message: "Supplier not found or inactive",
+        });
+        return;
+      }
+
+      purchaseOrder.supplier = supplier._id;
+    }
+
+    // Update project if provided
+    if (projectId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(projectId)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid project ID",
+        });
+        return;
+      }
+
+      const project = await Project.findOne({
+        _id: projectId,
+        company: req.user.company,
+      });
+
+      if (!project) {
+        res.status(400).json({
+          success: false,
+          message: "Project not found",
+        });
+        return;
+      }
+
+      purchaseOrder.project = project._id;
+    }
+
+    // Update materials/items if provided
+    if (items !== undefined) {
+      const materialIds = items.map(
+        (item: {
+          materialId: string;
+          quantity: number;
+          unitCost: number;
+        }) => item.materialId
+      );
+
+      const materials = await Material.find({
+        _id: { $in: materialIds },
+        company: req.user.company,
+        isActive: true,
+      });
+
+      if (materials.length !== materialIds.length) {
+        res.status(400).json({
+          success: false,
+          message: "One or more materials were not found or are inactive",
+        });
+        return;
+      }
+
+      const materialMap = new Map(
+        materials.map((material) => [
+          material._id.toString(),
+          material,
+        ])
+      );
+
+      const updatedItems = items.map(
+        (item: {
+          materialId: string;
+          quantity: number;
+          unitCost: number;
+        }) => ({
+          material: new mongoose.Types.ObjectId(item.materialId),
+          quantity: item.quantity,
+          receivedQuantity: 0,
+          unitCost: item.unitCost,
+          totalCost: item.quantity * item.unitCost,
+        })
+      );
+
+      const subtotal = updatedItems.reduce(
+        (total: number, item: {totalCost:number})=>
+            total + item.totalCost,
+        0
+      );
+
+      purchaseOrder.items = updatedItems;
+      purchaseOrder.subtotal = subtotal;
+      purchaseOrder.totalAmount = subtotal;
+    }
+
+    // Update notes if provided
+    if (notes !== undefined) {
+      purchaseOrder.notes = notes;
+    }
+
+    await purchaseOrder.save();
+
+    const updatedPurchaseOrder = await PurchaseOrder.findById(
+      purchaseOrder._id
+    )
+      .populate("supplier", "name phone email address contactPerson")
+      .populate("project", "name location clientName status")
+      .populate("requestedBy", "name email role")
+      .populate("items.material", "name code unit");
+
+    res.status(200).json({
+      success: true,
+      message: "Purchase order updated successfully",
+      purchaseOrder: updatedPurchaseOrder,
+    });
+  } catch (error) {
+    console.error("Update purchase order error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update purchase order",
+    });
+  }
+};

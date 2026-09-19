@@ -16,6 +16,7 @@ import materialRoutes from "./routes/materialRoutes.js";
 import stockMovementRoutes from "./routes/stockMovementRoutes.js";
 import purchaseOrderRoutes from "./routes/purchaseOrderRoutes.js";
 import dns from "node:dns";
+import userRoutes from "./routes/userRoutes.js"
 
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
 
@@ -39,6 +40,7 @@ app.use("/api/suppliers", supplierRoutes);
 app.use("/api/materials", materialRoutes);
 app.use("/api/stock-movements", stockMovementRoutes);
 app.use("/api/purchase-orders", purchaseOrderRoutes);
+app.use("/api/users", userRoutes);
 app.use(
   "/api/project-assignments",
   projectAssignmentRoutes

@@ -8,6 +8,7 @@ import{createPurchaseOrder,
   rejectPurchaseOrder,
   receivePurchaseOrder,
   cancelPurchaseOrder,
+  updatePurchaseOrder,
 }from "../controllers/purchaseOrderController.js";
 
 import{protect}from "../middleware/authMiddleware.js"
@@ -20,6 +21,7 @@ import{
     receivePurchaseOrderSchema,
     rejectPurchaseOrderSchema,
     cancelPurchaseOrderSchema,
+    updatePurchaseOrderSchema,
 }from"../validators/purchaseOrderValidators.js"
 
 const router=Router();
@@ -82,6 +84,14 @@ router.patch(
   allowRoles("admin", "project_manager"),
   validate(cancelPurchaseOrderSchema),
   cancelPurchaseOrder
+);
+
+router.patch(
+  "/:id",
+  protect,
+  allowRoles("admin", "project_manager", "storekeeper"),
+  validate(updatePurchaseOrderSchema),
+  updatePurchaseOrder
 );
 
 router.patch(

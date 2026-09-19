@@ -69,3 +69,20 @@ export const cancelPurchaseOrderSchema = z.object({
     .max(500, "Cancellation reason is too long"),
 });
 
+export const updatePurchaseOrderSchema = z.object({
+  supplierId: objectId("supplier ID").optional(),
+
+  projectId: objectId("project ID").optional(),
+
+  items: z
+    .array(purchaseOrderItemSchema)
+    .min(1, "At least one material is required")
+    .optional(),
+
+  notes: z
+    .string()
+    .trim()
+    .max(1000, "Notes are too long")
+    .optional(),
+});
+
