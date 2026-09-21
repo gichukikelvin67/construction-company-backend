@@ -14,14 +14,22 @@ import { sendPasswordResetEmail } from "../services/emailService.js";
 
 import { generateVerificationToken } from "../utils/generateVerificationToken.js";
 import { sendVerificationEmail } from "../services/emailService.js";
-import { success } from "zod";
+
+import { createAuditLog } from "../utils/auditLogger.js";
+import mongoose from "mongoose";
 
 
 export const register = async (
   req: Request,
   res: Response
 ): Promise<void> => {
-  try {
+  
+    const session =await mongoose.startSession();
+
+    try{
+
+    session.startTransaction();
+
     const { companyName, name, email, password, phone } = req.body;
 
     if (!companyName || !name || !email || !password || !phone) {
@@ -64,17 +72,27 @@ const verificationTokenHash = hashToken(
   verificationToken
 );
 
-    const company = await Company.create({
-      name: companyName,
-      email,
-      phone,
-    });
+    const company = await Company.create(
+      [
+        {
+          name:companyName,
+          email,
+          phone,
+        },
+      ],
+      {session}
+    );
 
-    const user = await User.create({
+    const createdCompany=company[0];
+
+    const user = await User.create(
+      [
+      {
       name,
       email,
       password: hashedPassword,
-      company: company._id,
+      phone,
+      company: createdCompany._id,
       role: "admin",
 
       emailVerified:false,
@@ -82,7 +100,14 @@ const verificationTokenHash = hashToken(
       emailVerificationExpires:new Date(
         Date.now() +15 *60 *1000
       ),
-    });
+    },
+  ],
+  {session}
+  );
+const createdUser=user[0];
+await session.commitTransaction();
+session.endSession();
+
     await sendVerificationEmail(
   email,
   name,
@@ -93,15 +118,21 @@ const verificationTokenHash = hashToken(
       success: true,
       message: "Account created successfully.Please check your email to verify your account.",
       user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        company: user.company,
+        id: createdUser._id,
+        name: createdUser.name,
+        email: createdUser.email,
+        role: createdUser.role,
+        company: createdUser.company,
       },
     });
   } catch (error) {
     console.error("Registration error:", error);
+
+    if(session.inTransaction()){
+      await session.abortTransaction();
+    }
+      session.endSession();
+    
 
     res.status(500).json({
       success: false,
@@ -162,6 +193,15 @@ export const login =async(
         const refreshToken=generateRefreshToken(
             user._id.toString()
         )
+        await createAuditLog({
+  companyId: user.company.toString(),
+  userId: user._id.toString(),
+  action: "login",
+  resource: "auth",
+  description: `User ${user.name} logged in`,
+  ipAddress: req.ip,
+  userAgent: req.get("user-agent"),
+});
 const refreshTokenHash = hashToken(refreshToken);
 
 await Session.create({
@@ -317,7 +357,7 @@ export const refreshAccessToken = async (
       console.warn(
         `Refresh token reuse detected for user ${decoded.userId}`
       );
-
+      const user=await User.findById(decoded.userId).select("company");
       /*
        * Revoke every active session belonging to this user.
        */
@@ -332,6 +372,19 @@ export const refreshAccessToken = async (
           },
         }
       );
+if(user){
+      await createAuditLog({
+  companyId: user.company.toString(),
+  userId: user._id.toString(),
+  action: "update",
+  resource: "auth",
+  resourceId: user._id.toString(),
+  description: "Refresh token reuse detected",
+  ipAddress: req.ip,
+  userAgent: req.get("user-agent"),
+});
+}
+
 
       /*
        * Remove the suspicious refresh token from
@@ -474,15 +527,33 @@ export const logout = async (
     if (refreshToken) {
       const refreshTokenHash = hashToken(refreshToken);
 
-      await Session.findOneAndUpdate(
+      const session=await Session.findOneAndUpdate(
         {
           refreshTokenHash,
           revokedAt: null,
         },
         {
           revokedAt: new Date(),
+        },
+        {
+          new:true,
         }
       );
+
+      if(session){
+        const user=await User.findById(session.user).select("company");
+        if(user){
+          await createAuditLog({
+            companyId:user.company.toString(),
+            userId:session.user.toString(),
+            action:"logout",
+            resource:"auth",
+            description:"User logged out",
+            ipAddress:req.ip,
+            userAgent:req.get("user-agent"),
+          })
+        }
+      }
     }
 
     res.clearCookie("refreshToken", {
@@ -572,6 +643,17 @@ export const verifyEmail = async (
 
     await user.save();
 
+    await createAuditLog({
+  companyId: user.company.toString(),
+  userId: user._id.toString(),
+  action: "update",
+  resource: "auth",
+  resourceId: user._id.toString(),
+  description: `User ${user.name} verified their email`,
+  ipAddress: req.ip,
+  userAgent: req.get("user-agent"),
+});
+
     res.status(200).json({
       success: true,
       message: "Email verified successfully",
@@ -631,6 +713,16 @@ export const forgotPassword=async(
             user.name,
             resetToken
         )
+      await createAuditLog({
+    companyId: user.company.toString(),
+    userId: user._id.toString(),
+    action: "update",
+    resource: "auth",
+    resourceId: user._id.toString(),
+    description: `Password reset requested for user ${user.name}`,
+    ipAddress: req.ip,
+    userAgent: req.get("user-agent"),
+});
         res.status(200).json({
             success:true,
             message:"If an account with that email exists, a password reset link has been sent.",
@@ -718,6 +810,16 @@ export const resetPassword = async (
         },
       }
     );
+    await createAuditLog({
+  companyId: user.company.toString(),
+  userId: user._id.toString(),
+  action: "update",
+  resource: "auth",
+  resourceId: user._id.toString(),
+  description: `User ${user.name} reset their password`,
+  ipAddress: req.ip,
+  userAgent: req.get("user-agent"),
+});
 
     res.status(200).json({
       success: true,
@@ -733,3 +835,84 @@ export const resetPassword = async (
     });
   }
 };
+
+export const changePassword=async(
+  req:AuthenticatedRequest,
+  res:Response
+):Promise<void> =>{
+  try{
+    if(!req.user){
+      res.status(401).json({
+        success:false,
+        message:"Authentication required",
+      })
+      return;
+    }
+    const{currentPassword,newPassword}=req.body;
+    const user=await User.findById(req.user.id);
+    if(!user){
+      res.status(404).json({
+        success:false,
+        message:"User not found",
+      })
+      return;
+    }
+    const isCurrentPasswordCorrect=await bcrypt.compare(
+      currentPassword,
+      user.password
+    )
+    if(!isCurrentPasswordCorrect){
+      res.status(409).json({
+        success:false,
+        message:"Current password is incorrect",
+      })
+      return;
+    }
+    const isSamePassword=await bcrypt.compare(
+      newPassword,
+      user.password
+    )
+    if(isSamePassword){
+      res.status(400).json({
+        success:false,
+        message:"New password must be different from your current password",
+      })
+      return;
+    }
+    user.password=await bcrypt.hash(newPassword,12);
+    user.passwordChangedAt=new Date();
+    await user.save();
+    await Session.updateMany(
+      {
+        user:user._id,
+        revokedAt:null,
+      },
+      {
+        revokedAt:new Date(),
+      }
+    )
+
+    await createAuditLog({
+      companyId:user.company.toString(),
+      userId:user._id.toString(),
+      action:"update",
+      resource:"auth",
+      resourceId:user._id.toString(),
+      description:`User ${user.name} changed their password`,
+      ipAddress:req.ip,
+      userAgent:req.get("user-agent"),
+    })
+    res.status(200).json({
+      success:true,
+      messag:"Password changed succefully.Please login again",
+    })
+
+  }catch(error){
+    console.error("Change password error:",error);
+
+    res.status(500).json({
+      success:false,
+      message:"Something went wrong while changing the password",
+    })
+  }
+}

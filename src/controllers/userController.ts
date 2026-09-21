@@ -389,6 +389,7 @@ export const updateUserProfile=async(
             return;
         }
         const{name, email,phone}=req.body;
+        
         const user=await User.findOne({
             _id: userId,
             company:req.user.company,
@@ -400,6 +401,11 @@ export const updateUserProfile=async(
             })
             return;
         }
+        const previousValues = {
+  name: user.name,
+  email: user.email,
+  phone: user.phone,
+};
         //Check whether new email belongs to another user
         if(email !==undefined){
             const normalizedEmail=email.toLowerCase();
@@ -424,6 +430,22 @@ export const updateUserProfile=async(
             user.phone=phone;
         }
         await user.save();
+        await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "update",
+  resource: "user",
+  resourceId: user._id.toString(),
+  description: `Updated profile for user ${user.name}`,
+  metadata: {
+    previousValues,
+    updatedValues: {
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+    },
+  },
+});
 
         res.status(200).json({
             success:true,

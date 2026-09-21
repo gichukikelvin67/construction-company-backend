@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { register ,login,getMe,refreshAccessToken,logout,verifyEmail,
-    forgotPassword,resetPassword,
+    forgotPassword,resetPassword,changePassword,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -12,20 +12,24 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   verifyEmailSchema,
+  changePasswordSchema,
 } from "../validators/authValidators.js";
-import { authRateLimiter } from "../middleware/rateLimiters.js";
+import { loginRateLimiter , registerRateLimiter, passwordResetRateLimiter} from "../middleware/rateLimiters.js";
 
 const router = Router();
 
 router.post("/register",
-    authRateLimiter,
+    registerRateLimiter,
     validate(registerSchema), 
     register);
 
 
-router.post("/login",
-    authRateLimiter,
-     validate (loginSchema), login);
+router.post(
+    "/login",
+    loginRateLimiter,
+     validate (loginSchema), 
+     login
+    );
 
 router.get("/me",protect,getMe);
 router.post("/refresh",refreshAccessToken);
@@ -35,11 +39,18 @@ router.post("/verify-email", validate(verifyEmailSchema), verifyEmail);
 
 
 router.post("/forgot-password",
-    authRateLimiter,
+    passwordResetRateLimiter,
     validate(forgotPasswordSchema),forgotPassword);
 
 router.post("/reset-password",
-    authRateLimiter,
+    passwordResetRateLimiter,
     validate(resetPasswordSchema),resetPassword);
+
+    router.patch(
+        "/change-password",
+        protect,
+        validate(changePasswordSchema),
+        changePassword
+    );
     
 export default router;

@@ -47,6 +47,7 @@ const userSchema=new Schema<IUser>(
             type:String,
             required:true,
             minlength:8,
+            select:false,
         },
 
         company:{
