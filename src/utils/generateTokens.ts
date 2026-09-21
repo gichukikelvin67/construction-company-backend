@@ -1,50 +1,12 @@
 import jwt from "jsonwebtoken";
+import{env}from "../config/env.js";
 
-const getAccessTokenSecret=(): string =>{
-    const secret=process.env.JWT_SECRET;
+const getAccessTokenSecret=(): string=>env.JWT_SECRET;
+const getRefreshTokenSecret= (): string =>env.JWT_REFRESH_SECRET;
 
-    if(!secret){
-        throw new Error("JWT_SECRET is not defined");
-    }
-
-    return secret;
-}
-const getRefreshTokenSecret= (): string =>{
-    const secret =process.env.JWT_REFRESH_SECRET;
-
-    if(!secret){
-        throw new Error("JWT_REFRESH_SECRET is not defined");
-    }
-
-    return secret;
-}
-
-export const generateAccessToken=(userId:string): string =>{
-    const secret =getAccessTokenSecret();
-
-    
-    return jwt.sign(
-        {
-            userId,
-        },
-        secret,
-        {
-            expiresIn:"15m",
-        }
-
-    )
-}
+export const generateAccessToken=(userId:string): string =>
+    jwt.sign({userId},getAccessTokenSecret(),{expiresIn:"15m"});
 
 
-export const generateRefreshToken=(userId: string): string =>{
-    return jwt.sign(
-        {
-            userId,
-
-        },
-        getRefreshTokenSecret(),
-        {
-            expiresIn:"7d",
-        }
-    )
-}
+export const generateRefreshToken=(userId: string): string =>
+    jwt.sign({userId},getRefreshTokenSecret(),{expiresIn:"7d"})

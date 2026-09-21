@@ -18,6 +18,7 @@ import purchaseOrderRoutes from "./routes/purchaseOrderRoutes.js";
 import dns from "node:dns";
 import userRoutes from "./routes/userRoutes.js"
 import auditLogRoutes from "./routes/auditLogRoutes.js";
+import { env } from "./config/env.js";
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
 
 
@@ -25,7 +26,7 @@ const app=express();
 
 app.use (
     cors({
-        origin:process.env.FRONTEND_URL,
+        origin:env.FRONTEND_URL,
         credentials:true,
     }));
 app.use(helmet());

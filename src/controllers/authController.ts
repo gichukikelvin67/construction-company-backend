@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import {env}from "../config/env.js";
 import Company from "../models/Company.js";
 import User from "../models/User.js";
 import Session from "../models/Session.js";
@@ -313,11 +314,7 @@ export const refreshAccessToken = async (
       return;
     }
 
-    const secret = process.env.JWT_REFRESH_SECRET;
-
-    if (!secret) {
-      throw new Error("JWT_REFRESH_SECRET is not defined");
-    }
+    const secret = env.JWT_REFRESH_SECRET;
 
     const decoded = jwt.verify(
       refreshToken,

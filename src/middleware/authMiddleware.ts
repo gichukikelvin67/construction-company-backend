@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { env } from "../config/env.js";
 
 interface JwtPayload{
     userId:string;
@@ -15,15 +16,7 @@ export interface AuthenticatedRequest extends Request{
     }
 }
 
-const getAccessTokenSecret=(): string => {
-    const secret=process.env.JWT_SECRET;
-
-    if(!secret){
-        throw new Error("JWT_SECRET  is not defined");
-    }
-
-    return secret;
-}
+const getAccessTokenSecret=(): string => env.JWT_SECRET;
 
 export const protect=async(
     req:AuthenticatedRequest,
