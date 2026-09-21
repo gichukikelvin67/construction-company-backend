@@ -197,3 +197,234 @@ export const getTasks = async (
     });
   }
 };
+
+export const getTaskById = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const  id  = req.params.id as string;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid task ID",
+      });
+      return;
+    }
+
+    const task = await Task.findOne({
+      _id: id,
+      company: req.user.company,
+    })
+      .populate("project", "name status")
+      .populate("assignedTo", "name email role")
+      .populate("createdBy", "name email")
+      .populate("updatedBy", "name email");
+
+    if (!task) {
+      res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      task,
+    });
+  } catch (error) {
+    console.error("Get task error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve task",
+    });
+  }
+};
+
+export const updateTask = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const id = req.params.id as string;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid task ID",
+      });
+      return;
+    }
+
+    const task = await Task.findOne({
+      _id: id,
+      company: req.user.company,
+    });
+
+    if (!task) {
+      res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+      return;
+    }
+
+    const {
+      title,
+      description,
+      assignedTo,
+      status,
+      priority,
+      progress,
+      startDate,
+      dueDate,
+    } = req.body;
+
+    // Make sure the assigned user belongs to the same company
+    if (assignedTo) {
+      const assignedUser = await User.findOne({
+        _id: assignedTo,
+        company: req.user.company,
+        isActive: true,
+      });
+
+      if (!assignedUser) {
+        res.status(400).json({
+          success: false,
+          message: "Assigned user not found or inactive",
+        });
+        return;
+      }
+    }
+
+    // Prevent invalid progress/status combinations
+    if (status === "completed" && progress !== undefined && progress !== 100) {
+      res.status(400).json({
+        success: false,
+        message: "A completed task must have 100% progress",
+      });
+      return;
+    }
+
+    if (progress === 100 && status && status !== "completed") {
+      res.status(400).json({
+        success: false,
+        message: "A task with 100% progress must be completed",
+      });
+      return;
+    }
+
+    // Validate dates when both are supplied
+    const newStartDate =
+      startDate !== undefined
+        ? startDate
+          ? new Date(startDate)
+          : null
+        : task.startDate;
+
+    const newDueDate =
+      dueDate !== undefined
+        ? dueDate
+          ? new Date(dueDate)
+          : null
+        : task.dueDate;
+
+    if (
+      newStartDate &&
+      newDueDate &&
+      newDueDate < newStartDate
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Due date cannot be before start date",
+      });
+      return;
+    }
+
+    // Update only the fields that were provided
+    if (title !== undefined) task.title = title;
+    if (description !== undefined) task.description = description;
+
+    if (assignedTo !== undefined) {
+      task.assignedTo = assignedTo
+        ? new mongoose.Types.ObjectId(assignedTo)
+        : undefined;
+    }
+
+    if (priority !== undefined) task.priority = priority;
+
+    if (startDate !== undefined) {
+      task.startDate = startDate ? new Date(startDate) : undefined;
+    }
+
+    if (dueDate !== undefined) {
+      task.dueDate = dueDate ? new Date(dueDate) : undefined;
+    }
+
+    if (status !== undefined) {
+      task.status = status;
+    }
+
+    if (progress !== undefined) {
+      task.progress = progress;
+    }
+
+    // Completing a task automatically sets progress to 100%
+    if (task.status === "completed") {
+      task.progress = 100;
+      task.completedAt = task.completedAt ?? new Date();
+    } else {
+      task.completedAt = undefined;
+    }
+
+    task.updatedBy = new mongoose.Types.ObjectId(req.user.id);
+
+    await task.save();
+
+    await createAuditLog({
+      companyId: req.user.company,
+      userId: req.user.id,
+      action: "update",
+      resource: "task",
+      resourceId: task._id.toString(),
+      description: `Updated task ${task.title}`,
+      metadata: {
+        status: task.status,
+        priority: task.priority,
+        progress: task.progress,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Task updated successfully",
+      task,
+    });
+  } catch (error) {
+    console.error("Update task error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update task",
+    });
+  }
+};

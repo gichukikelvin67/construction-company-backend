@@ -3,6 +3,8 @@ import { Router } from "express";
 import {
   createTask,
   getTasks,
+  getTaskById,
+  updateTask,
 } from "../controllers/taskController.js";
 
 import { protect } from "../middleware/authMiddleware.js";
@@ -10,6 +12,7 @@ import { validate } from "../middleware/validate.js";
 
 import {
   createTaskSchema,
+  updateTaskSchema,
 } from "../validators/taskValidators.js";
 
 const router = Router();
@@ -29,4 +32,15 @@ router.get(
   getTasks
 );
 
+router.get(
+  "/:id",
+  protect,
+  getTaskById
+);
+router.patch(
+  "/:id",
+  protect,
+  validate(updateTaskSchema),
+  updateTask
+);
 export default router;
