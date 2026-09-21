@@ -19,6 +19,7 @@ import dns from "node:dns";
 import userRoutes from "./routes/userRoutes.js"
 import auditLogRoutes from "./routes/auditLogRoutes.js";
 import { env } from "./config/env.js";
+import taskRoutes from "./routes/taskRoutes.js";
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
 
 
@@ -41,6 +42,7 @@ app.use("/api/suppliers", supplierRoutes);
 app.use("/api/materials", materialRoutes);
 app.use("/api/stock-movements", stockMovementRoutes);
 app.use("/api/purchase-orders", purchaseOrderRoutes);
+app.use("/api/tasks", taskRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/audit-logs", auditLogRoutes);
 app.use(
