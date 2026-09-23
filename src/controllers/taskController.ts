@@ -135,7 +135,11 @@ export const getTasks = async (
       return;
     }
 
-    const { projectId, status, priority, assignedTo } = req.query;
+    const { projectId, status, priority, assignedTo,search,page="1",limit="20"} = req.query;
+//Convert pagination values to numbers
+const pageNumber=Math.max(Number(page),1);
+const limitNumber=Math.min(Math.max(Number(limit),1),100);
+const skip=(pageNumber-1)* limitNumber;
 
     const filter: Record<string, unknown> = {
       company: req.user.company,
@@ -176,16 +180,51 @@ export const getTasks = async (
 
       filter.assignedTo = assignedTo;
     }
+    //Search task title and description
+    if(search){
+        const searchText=String(search).trim();
+        if(searchText.length >0){
+            filter.$or=[
+                {
+                title:{
+                    $regex:searchText,
+                    $options:"i",
+                },
+            },
+            
+            {
+                description:{
+                    $regex:searchText,
+                    $options:"i",
+                }
+            }
+        ];
+        }
+    }
+    //Get total number of matching tasks
+    const totalTasks=await Task.countDocuments(filter);
+    //Get tasks for current page
 
     const tasks = await Task.find(filter)
       .populate("project", "name status")
       .populate("assignedTo", "name email role")
       .populate("createdBy", "name email")
-      .sort({ dueDate: 1, createdAt: -1 });
+      .sort({ dueDate: 1, createdAt: -1 })
+      .skip(skip)
+      .limit(limitNumber);
+
+      const totalPages=Math.ceil(totalTasks/limitNumber);
 
     res.status(200).json({
       success: true,
-      count: tasks.length,
+      pagination:{
+        page:pageNumber,
+        limit:limitNumber,
+        totalTasks,
+        totalPages,
+        hasNextPage:pageNumber<totalPages,
+        hasPreviousPage:pageNumber>1,
+      },
       tasks,
     });
   } catch (error) {
@@ -428,3 +467,141 @@ export const updateTask = async (
     });
   }
 };
+
+export const updateTaskProgress=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void>=>{
+    try{
+        if(!req.user){
+            res.status(401).json({
+                success:false,
+                message:"Authentication required"
+            })
+            return;
+        }
+        const id=req.params.id as string;
+        const{progress}=req.body;
+        if(!mongoose.Types.ObjectId.isValid(id)){
+            res.status(400).json({
+                success:false,
+                message:"Invalid task ID",
+            })
+            return;
+        }
+        const task=await Task.findOne({
+            _id:id,
+            company:req.user.company,
+        })
+        if(!task){
+            res.status(404).json({
+                success:false,
+                message:"Task not found",
+            })
+            return;
+        }
+        //Update progress
+        task.progress=progress;
+
+        //Automatically manage task status
+        if(progress===100){
+            task.status="completed";
+            task.completedAt=new Date();
+        }else if(progress>0){
+            task.status="in_progress";
+            task.completedAt=undefined;
+        }else{
+            task.status="todo";
+            task.completedAt=undefined;
+        }
+        task.updatedBy=new mongoose.Types.ObjectId(req.user.id);
+        await task.save();
+        await createAuditLog({
+            companyId:req.user.company,
+            userId:req.user.id,
+            action:"update",
+            resource:"task",
+            resourceId:task._id.toString(),
+            description:`Updated progress for task ${task.title}to ${progress}%`,
+            metadata:{
+                progress,
+                status:task.status,
+            },
+        });
+
+        res.status(200).json({
+            success:true,
+            message:"Task progress updated successfully",
+            task,
+        })
+
+    }catch(error){
+        console.error("Update task progress error:",error);
+
+        res.status(500).json({
+            success:false,
+            message:"Failed to update task progress",
+        })
+    }
+};
+
+export const deleteTask=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void>=>{
+    try{
+        if(!req.user){
+            res.status(401).json({
+                success:false,
+                message:"Authentication required"
+            })
+            return;
+        }
+        const id=req.params.id as string;
+        if(!mongoose.Types.ObjectId.isValid(id)){
+            res.status(400).json({
+                success:false,
+                message:"Invalid task ID",
+            })
+            return;
+        }
+        const task=await Task.findOne({
+           _id:id,
+           company:req.user.company, 
+        })
+        if(!task){
+            res.status(404).json({
+                success:false,
+                message:"Task not found",
+            })
+            return;
+        }
+        await Task.deleteOne({
+            _id:task._id,
+        })
+        await createAuditLog({
+             companyId: req.user.company,
+      userId: req.user.id,
+      action: "delete",
+      resource: "task",
+      resourceId: task._id.toString(),
+      description: `Deleted task ${task.title}`,
+      metadata: {
+        projectId: task.project.toString(),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Task deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete task error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete task",
+    });
+  }
+};
+        

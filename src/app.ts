@@ -20,6 +20,7 @@ import userRoutes from "./routes/userRoutes.js"
 import auditLogRoutes from "./routes/auditLogRoutes.js";
 import { env } from "./config/env.js";
 import taskRoutes from "./routes/taskRoutes.js";
+import dailyReportRoutes from "./routes/dailyReportRoutes.js";
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
 
 
@@ -45,6 +46,7 @@ app.use("/api/purchase-orders", purchaseOrderRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/audit-logs", auditLogRoutes);
+app.use("/api/daily-reports", dailyReportRoutes);
 app.use(
   "/api/project-assignments",
   projectAssignmentRoutes
