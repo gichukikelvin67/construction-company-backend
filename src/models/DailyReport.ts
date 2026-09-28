@@ -21,6 +21,9 @@ export  interface IDailyReport  extends Document{
  notes?:string;
  submittedBy:mongoose.Types.ObjectId;
  updatedBy?:mongoose.Types.ObjectId;
+ isArchived:boolean;
+ archivedAt?:Date;
+ archivedBy?:mongoose.Types.ObjectId;
 }
 const dailyReportSchema =new Schema<IDailyReport>(
     {
@@ -98,7 +101,19 @@ const dailyReportSchema =new Schema<IDailyReport>(
         updatedBy:{
             type:Schema.Types.ObjectId,
             ref:"User",
-        }
+        },
+        isArchived:{
+            type:Boolean,
+              default:false,
+              index:true,
+        },
+        archivedAt:{
+            type:Date,
+        },
+        archivedBy:{
+            type:Schema.Types.ObjectId,
+            ref:"User",
+        },
     },
     {
         timestamps:true,

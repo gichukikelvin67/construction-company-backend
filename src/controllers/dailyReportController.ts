@@ -146,6 +146,7 @@ export const getDailyReports=async(
 
         const filter:Record<string,unknown>={
             company:req.user.company,
+            isArchived:{$ne:true},
         };
         //Project filter
          if (projectId) {
@@ -256,6 +257,7 @@ export const getDailyReportById=async(
         const report=await DailyReport.findOne({
             _id:id,
             company:req.user.company,
+            isArchived:{$ne:true},
         })
         .populate("project", "name status")
         .populate("submittedBy","name email role")
@@ -427,4 +429,147 @@ export const updateDailyReport=async(
     });
   }
 
+}
+
+export const archiveDailyReport=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void>=>{
+    try{
+        if(!req.user){
+            res.status(401).json({
+                success:false,
+                message:"Authentication required",
+            })
+            return;
+        }
+        const id=req.params.id as string;
+        if(!mongoose.Types.ObjectId.isValid(id)){
+            res.status(400).json({
+                success:false,
+                message:"Invalid daily report ID",
+            })
+            return;
+        }
+        const report=await DailyReport.findOne({
+            _id:id,
+            company:req.user.company,
+            isArchived:{$ne:true},
+        })
+        if(!report){
+            res.status(404).json({
+                success:false,
+                message:"Daily reports not found",
+            })
+            return;
+        }
+
+        report.isArchived=true;
+        report.archivedAt=new Date();
+        report.archivedBy=new mongoose.Types.ObjectId(req.user.id);
+        await report.save();
+
+        await createAuditLog({
+            companyId:req.user.company,
+            userId:req.user.id,
+            action:"update",
+            resource:"daily_report",
+            resourceId:report._id.toString(),
+            description:`Archived daily report ${report._id}`,
+            metadata:{
+                projectId:report.project.toString(),
+                reportDate:report.reportDate.toString(),
+                archived:report.archivedAt.toISOString(),
+            },
+
+        })
+        res.status(200).json({
+            success:true,
+            message:"Daily report archived successfully",
+                })
+    }catch(error){
+        console.error("Archive daily report error:",error);
+        res.status(500).json({
+            success:false,
+            message:"Failed to archieve daily report",
+        })
+    }
+}
+export const restoreDailyReport=async(
+    req:AuthenticatedRequest,
+    res:Response
+):Promise<void>=>{
+    try{
+        if(!req.user){
+            res.status(401).json({
+                success:false,
+                message:"Authentication required",
+            });
+            return;
+        }
+        const id=req.params.id as string;
+        if(!mongoose.Types.ObjectId.isValid(id)){
+            res.status(400).json({
+                success:false,
+                message:"Invalid report ID",
+            })
+            return;
+        }
+        const report=await DailyReport.findOne({
+            _id:id,
+            company:req.user.company,
+            isArchived:true,
+        })
+        if(!report){
+            res.status(404).json({
+                success:false,
+                message:"Daily report not found",
+            })
+            return;
+        }
+        //make sure restoring wont create a duplicate report
+        const existingReport=await DailyReport.findOne({
+            _id:{$ne:report._id},
+            company:req.user.company,
+            project:report.project,
+            reportDate:report.reportDate,
+            isArchived:{$ne:true,}
+        });
+        if(existingReport){
+            res.status(409).json({
+                success:false,
+                message:"Cannot restore report because an active report already exists for this project.",
+
+            })
+            return;
+        }
+        report.isArchived=false;
+        report.archivedAt=undefined;
+        report.archivedBy=undefined;
+        report.updatedBy=new mongoose.Types.ObjectId(req.user.id);
+        await report.save();
+        await createAuditLog({
+            companyId:req.user.company,
+            userId:req.user.id,
+            action:"update",
+            resource:"daily_report",
+            resourceId:report._id.toString(),
+            description:`Restored daily report ${report._id}`,
+            metadata:{
+                projectId:report.project.toString(),
+                reportDate:report.reportDate.toISOString(),
+            },
+        })
+        res.status(200).json({
+            success:true,
+            message:"Daily report restored successfully",
+            report,
+        })
+        }catch(error){
+            console.error("Daily report restore error:",error);
+            res.status(500).json({
+                success:false,
+                message:"Filed  to restore daily report",
+            })
+        }
 }

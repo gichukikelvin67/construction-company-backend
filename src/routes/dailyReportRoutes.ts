@@ -5,10 +5,13 @@ import{
     getDailyReports,
     getDailyReportById,
     updateDailyReport,
+    archiveDailyReport,
+    restoreDailyReport,
 }from "../controllers/dailyReportController.js";
 
 import { protect} from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
+import { allowRoles } from "../middleware/roleMiddleware.js";
 
 import { createDailyReportSchema ,updateDailyReportSchema} from "../validators/dailyReportValidators.js";
 
@@ -35,5 +38,17 @@ router.patch(
   protect,
   validate(updateDailyReportSchema),
   updateDailyReport
-)
+);
+router.patch(
+  "/:id/archive",
+  protect,
+  allowRoles("admin", "project_manager"),
+  archiveDailyReport
+);
+router.patch(
+  "/:id/restore",
+  protect,
+  allowRoles("admin"),
+  restoreDailyReport
+);
 export default router;

@@ -1,0 +1,130 @@
+import mongoose,{Document,Schema}from "mongoose";
+export type DocumentCategory=
+|"contract"
+|"invoice"
+|"receipt"
+|"plan"
+|"inspection_report"
+|"site_photo"
+|"other";
+
+export interface IDocument extends Document{
+    company:mongoose.Types.ObjectId;
+    project:mongoose.Types.ObjectId;
+    name:string;
+    description?:string;
+    category:DocumentCategory;
+    fileUrl:string;
+    fileName:string;
+    fileType:string;
+    fileSize:number;
+    uploadedBy:mongoose.Types.ObjectId;
+    updatedBy?:mongoose.Types.ObjectId;
+    isArchived:boolean;
+    archivedAt?:Date
+    archivedBy?:mongoose.Types.ObjectId;
+
+}
+const documentSchema=new Schema<IDocument>(
+    {
+        company:{
+            type:Schema.Types.ObjectId,
+            ref:"Comapny",
+            required:true,
+            index:true,
+        },
+        project:{
+            type:Schema.Types.ObjectId,
+            ref:"Project",
+            required:true,
+            index:true,
+        },
+        name:{
+            type:String,
+            required:true,
+            trim:true,
+            maxlength:200,
+        },
+        description:{
+            type:String,
+            trim:true,
+            maxlength:2000,
+        },
+        category:{
+            type:String,
+            enum:[
+                "contract",
+                "invoice",
+                "receipt",
+                "plan",
+                "inspection_report",
+                "site_photo",
+                "other",
+            ],
+            required:true,
+            index:true,
+        },
+        fileUrl:{
+            type:String,
+            required:true,
+            trim:true,
+        },
+        fileName:{
+            type:String,
+            required:true,
+            trim:true,
+            maxlength:255,
+        },
+        fileType:{
+            type:String,
+            required:true,
+            trim:true,
+            maxlength:100,
+        },
+        fileSize:{
+            type:Number,
+            required:true,
+            min:0,
+        },
+        uploadedBy:{
+            type:Schema.Types.ObjectId,
+            ref:"User",
+            required:true,
+            index:true,
+        },
+        updatedBy:{
+            type:Schema.Types.ObjectId,
+            ref:"User",
+        },
+        isArchived:{
+            type:Boolean,
+            default:false,
+            index:true,
+        },
+        archivedAt:{
+            type:Date,
+        },
+        archivedBy:{
+            type:Schema.Types.ObjectId,
+            ref:"User",
+        },
+    },
+    {
+        timestamps:true,
+    }
+)
+documentSchema.index({
+    company:1,
+    project:1,
+    createdAt:-1,
+});
+documentSchema.index({
+    company:1,
+    project:1,
+    category:1,
+});
+const ProjectDocument=mongoose.model<IDocument>(
+    "Document",
+    documentSchema
+);
+export default ProjectDocument;
