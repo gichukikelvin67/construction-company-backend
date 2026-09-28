@@ -13,7 +13,7 @@ export const createInvoiceSchema=z
     projectId:objectId("project ID").optional(),
     supplierId:objectId("supplier ID").optional(),
 
-    InvoiceNumber:z
+    invoiceNumber:z
     .string()
     .trim()
     .min(1,"Invoice number is required")

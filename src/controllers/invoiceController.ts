@@ -40,10 +40,21 @@ export const createInvoice=async(
                 })
                 return;
             }
+            project=await Project.findOne({
+                _id:projectId,
+                company:req.user.company,
+            })
+            if(!project){
+                res.status(404).json({
+                    success:false,
+                    message:"Project not found",
+                })
+                return;
+            }
         }
 
         let supplier: mongoose.HydratedDocument<any> | null = null;
-        if(supplier){
+        if(supplierId){
             if(!mongoose.Types.ObjectId.isValid(supplierId)){
                 res.status(400).json({
                     success:false,
@@ -65,7 +76,7 @@ export const createInvoice=async(
         }
         //Prevent duplicate invoice numbers within the company
         const existingInvoice=await Invoice.findOne({
-            compnay:req.user.company,
+            company:req.user.company,
             invoiceNumber,
         })
         if(existingInvoice){
