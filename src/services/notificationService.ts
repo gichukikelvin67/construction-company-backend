@@ -9,6 +9,7 @@ interface CreateNotificationData{
     message:string;
     resource?:string;
     resourceId?:string |mongoose.Types.ObjectId;
+    notificationKey?:string;
 }
 export const createNotification=async({
     companyId,
@@ -18,6 +19,7 @@ export const createNotification=async({
     message,
     resource,
     resourceId,
+    notificationKey,
 }:CreateNotificationData)=>{
     const notification=await Notification.create({
         company:companyId,
@@ -27,6 +29,7 @@ export const createNotification=async({
         message,
         resource,
         resourceId,
+        notificationKey,
         isRead:false,
     })
     console.log("NOTIFICATION CREATED:", notification);

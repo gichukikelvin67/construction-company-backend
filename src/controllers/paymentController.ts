@@ -142,7 +142,7 @@ const usersToNotify = await User.find({
 
 const notificationMessage = `Payment of KES ${payment.amount.toLocaleString()} was received for invoice ${invoice.invoiceNumber}.`;
 
-await Promise.all(
+await Promise.allSettled(
   usersToNotify.map((user) =>
     createNotification({
       companyId: req.user!.company,
@@ -172,8 +172,9 @@ session.endSession();
       },
     });
   } catch (error) {
+    if(session.inTransaction()){
     await session.abortTransaction();
-
+    }
     console.error("Payment creation error:", error);
 
     res.status(500).json({

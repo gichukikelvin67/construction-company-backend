@@ -19,6 +19,7 @@ export interface INotification extends Document {
   message: string;
   resource?: string;
   resourceId?: mongoose.Types.ObjectId;
+  notificationKey?:string;
   isRead: boolean;
   readAt?: Date;
 }
@@ -77,6 +78,11 @@ const notificationSchema = new Schema<INotification>(
     resourceId: {
       type: Schema.Types.ObjectId,
     },
+    notificationKey: {
+  type: String,
+  trim: true,
+  index: true,
+},
 
     isRead: {
       type: Boolean,
@@ -105,6 +111,19 @@ notificationSchema.index({
   user: 1,
   createdAt: -1,
 });
+notificationSchema.index(
+  {
+    company: 1,
+    user: 1,
+    notificationKey: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      notificationKey: { $exists: true },
+    },
+  }
+);
 
 const Notification = mongoose.model<INotification>(
   "Notification",

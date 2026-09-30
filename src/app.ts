@@ -25,14 +25,8 @@ import documentRoutes from "./routes/documentRoutes.js";
 import invoiceRoutes from "./routes/invoiceRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
-
-
-
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
-
-
 const app=express();
-
 app.use (
     cors({
         origin:env.FRONTEND_URL,
@@ -67,5 +61,6 @@ app.get("/api/health",(_req,res)=>{
         message:"Aesthetic API is running"
     })
 })
+
 app.use("/api/auth", authRoutes);
 export default app;

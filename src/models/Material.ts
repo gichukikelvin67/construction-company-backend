@@ -3,7 +3,7 @@ export type MaterialUnit=
 |"Kg"
 |"ton"
 |"bag"
-|"price"
+|"piece"
 |"liter"
 |"meter"
 |"square_meter"
