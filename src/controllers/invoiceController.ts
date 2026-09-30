@@ -5,6 +5,8 @@ import Project from "../models/Project.js";
 import Supplier from "../models/Supplier.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { createAuditLog } from "../utils/auditLogger.js";;
+import User from "../models/User.js";
+import { createNotification } from "../services/notificationService.js";
 
 export const createInvoice=async(
     req:AuthenticatedRequest,
@@ -128,6 +130,32 @@ export const createInvoice=async(
         supplierId: supplier?._id.toString(),
       },
     });
+    const usersToNotify = await User.find({
+  company: req.user.company,
+  role: {
+    $in: ["admin", "accountant", "project_manager"],
+  },
+  isActive: true,
+  _id: {
+    $ne: req.user.id,
+  },
+}).select("_id role");
+console.log("USERS TO NOTIFY:", usersToNotify);
+const notificationMessage = `Invoice ${invoice.invoiceNumber} has been created for KES ${invoice.totalAmount.toLocaleString()}.`;
+
+await Promise.all(
+  usersToNotify.map((user) =>
+    createNotification({
+      companyId: req.user!.company,
+      userId: user._id,
+      type: "invoice",
+      title: "New Invoice Created",
+      message: notificationMessage,
+      resource: "invoice",
+      resourceId: invoice._id,
+    })
+  )
+);
 
     res.status(201).json({
       success: true,

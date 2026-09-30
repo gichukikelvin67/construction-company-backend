@@ -6,7 +6,8 @@ import StockMovement from "../models/StockMovement.js";
 import Material from "../models/Material.js";
 import Supplier from "../models/Supplier.js";
 import Project from "../models/Project.js";
-
+import User from "../models/User.js";
+import { createNotification } from "../services/notificationService.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 
 //GET CURRENT STOCK
@@ -364,6 +365,39 @@ if (referenceNumber) {
         message:"Stock movement recorded successfully",
         movement,
     });
+    const currentStock = await calculateCurrentStock(
+    materialId,
+    req.user.company
+);
+
+if (currentStock <= material.minimumStock) {
+    const usersToNotify = await User.find({
+        company: req.user.company,
+        role: {
+            $in: ["admin", "storekeeper", "project_manager"],
+        },
+        isActive: true,
+        _id: {
+            $ne: req.user.id,
+        },
+    }).select("_id role");
+
+    const notificationMessage = `${material.name} stock is low. Current stock: ${currentStock} ${material.unit}. Minimum stock level: ${material.minimumStock} ${material.unit}.`;
+
+    await Promise.all(
+        usersToNotify.map((user) =>
+            createNotification({
+                companyId: req.user!.company,
+                userId: user._id,
+                type: "stock",
+                title: "Low Stock Alert",
+                message: notificationMessage,
+                resource: "stock_movement",
+                resourceId: movement._id,
+            })
+        )
+    );
+}
 
     }catch(error){
         console.error("Create stock movement error:",error);

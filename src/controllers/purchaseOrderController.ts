@@ -11,6 +11,8 @@ import Counter from "../models/Counter.js";
 
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { createAuditLog } from "../utils/auditLogger.js";
+import User from "../models/User.js";
+import { createNotification } from "../services/notificationService.js";
 
 
 //Generate the next purchase order number
@@ -187,7 +189,7 @@ const purchaseOrder=await PurchaseOrder.create({
     project: projectId,
     company:req.user.company,
 
-    items,
+    items:purchaseOrderItems,
 
     subtotal,
     totalAmount:subtotal,
@@ -211,6 +213,32 @@ await createAuditLog({
     projectId: purchaseOrder.project.toString(),
   },
 });
+const usersToNotify = await User.find({
+  company: req.user.company,
+  role: {
+    $in: ["admin", "accountant", "project_manager"],
+  },
+  isActive: true,
+  _id: {
+    $ne: req.user.id,
+  },
+}).select("_id role");
+
+const notificationMessage = `Purchase order ${purchaseOrder.poNumber} has been created for KES ${purchaseOrder.totalAmount.toLocaleString()}.`;
+
+await Promise.all(
+  usersToNotify.map((user) =>
+    createNotification({
+      companyId: req.user!.company,
+      userId: user._id,
+      type: "purchase_order",
+      title: "New Purchase Order",
+      message: notificationMessage,
+      resource: "purchase_order",
+      resourceId: purchaseOrder._id,
+    })
+  )
+);
 
 //return result
 

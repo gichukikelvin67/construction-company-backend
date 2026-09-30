@@ -4,7 +4,8 @@ import mongoose from "mongoose";
 import Expense from "../models/Expense.js";
 import Project from "../models/Project.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
-
+import User from "../models/User.js";
+import { createNotification } from "../services/notificationService.js";
 
 export const createExpense=async(
     req:AuthenticatedRequest,
@@ -66,6 +67,32 @@ export const createExpense=async(
         notes,
         recordedBy:req.user.id,
     });
+    const usersToNotify = await User.find({
+    company: req.user.company,
+    role: {
+        $in: ["admin", "accountant", "project_manager"],
+    },
+    isActive: true,
+    _id: {
+        $ne: req.user.id,
+    },
+}).select("_id role");
+
+const notificationMessage = `An expense of KES ${expense.amount.toLocaleString()} has been recorded for project ${project.name}.`;
+
+await Promise.all(
+    usersToNotify.map((user) =>
+        createNotification({
+            companyId: req.user!.company,
+            userId: user._id,
+            type: "expense",
+            title: "New Expense Recorded",
+            message: notificationMessage,
+            resource: "expense",
+            resourceId: expense._id,
+        })
+    )
+);
     res.status(201).json({
         success:true,
         message:"Expense recorded successfully",

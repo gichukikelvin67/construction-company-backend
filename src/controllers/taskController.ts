@@ -6,6 +6,7 @@ import Project from "../models/Project.js";
 import User from "../models/User.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { createAuditLog } from "../utils/auditLogger.js";
+import { createNotification } from "../services/notificationService.js";
 
 export const createTask = async (
   req: AuthenticatedRequest,
@@ -106,6 +107,17 @@ export const createTask = async (
         assignedTo: assignedTo ?? null,
       },
     });
+    if (task.assignedTo) {
+  await createNotification({
+    companyId: req.user.company,
+    userId: task.assignedTo,
+    type: "task",
+    title: "New Task Assigned",
+    message: `You have been assigned a new task: ${task.title}.`,
+    resource: "task",
+    resourceId: task._id,
+  });
+}
 
     res.status(201).json({
       success: true,

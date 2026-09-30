@@ -5,6 +5,8 @@ import Project from "../models/Project.js";
 
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { createAuditLog } from "../utils/auditLogger.js";
+import User from "../models/User.js";
+import { createNotification } from "../services/notificationService.js";
 export const createDailyReport=async(
     req:AuthenticatedRequest,
     res:Response
@@ -94,6 +96,32 @@ export const createDailyReport=async(
         workersPresent,
       },
     });
+    const usersToNotify = await User.find({
+  company: req.user.company,
+  role: {
+    $in: ["admin", "accountant", "project_manager"],
+  },
+  isActive: true,
+  _id: {
+    $ne: req.user.id,
+  },
+}).select("_id role");
+
+const notificationMessage = `A daily report has been submitted for project ${project.name}.`;
+
+await Promise.all(
+  usersToNotify.map((user) =>
+    createNotification({
+      companyId: req.user!.company,
+      userId: user._id,
+      type: "daily_report",
+      title: "New Daily Report",
+      message: notificationMessage,
+      resource: "daily_report",
+      resourceId: report._id,
+    })
+  )
+);
 
     res.status(200).json({
         success:true,

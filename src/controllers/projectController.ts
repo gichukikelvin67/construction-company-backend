@@ -3,7 +3,8 @@ import mongoose from "mongoose";
 import Project from "../models/Project.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 
-
+import User from "../models/User.js";
+import { createNotification } from "../services/notificationService.js";
 export const createProject=async(
     req:AuthenticatedRequest,
     res:Response
@@ -35,6 +36,33 @@ export const createProject=async(
       // Record who created the project.
       createdBy: req.user.id,
     });
+    const usersToNotify = await User.find({
+  company: req.user.company,
+  role: {
+    $in: ["admin", "project_manager"],
+  },
+  isActive: true,
+  _id: {
+    $ne: req.user.id,
+  },
+}).select("_id role");
+console.log("PROJECT USERS TO NOTIFY:", usersToNotify);
+
+const notificationMessage = `A new project, ${project.name}, has been created.`;
+
+await Promise.all(
+  usersToNotify.map((user) =>
+    createNotification({
+      companyId: req.user!.company,
+      userId: user._id,
+      type: "project",
+      title: "New Project Created",
+      message: notificationMessage,
+      resource: "project",
+      resourceId: project._id,
+    })
+  )
+);
 
     res.status(201).json({
       success: true,

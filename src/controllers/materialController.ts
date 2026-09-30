@@ -148,7 +148,7 @@ export const getMaterial=async(
             _id:materialId,
             company:req.user.company,
             isActive:true,
-        }).populate("CreatedBy","name email");
+        }).populate("createdBy","name email");
 
         if(!material){
             res.status(404).json({

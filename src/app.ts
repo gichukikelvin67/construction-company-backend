@@ -24,6 +24,10 @@ import dailyReportRoutes from "./routes/dailyReportRoutes.js";
 import documentRoutes from "./routes/documentRoutes.js";
 import invoiceRoutes from "./routes/invoiceRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+
+
+
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
 
 
@@ -53,20 +57,10 @@ app.use("/api/daily-reports", dailyReportRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/payments", paymentRoutes);
-app.use(
-  "/api/project-assignments",
-  projectAssignmentRoutes
-);
-app.use(
-  "/api/attendance",
-  attendanceRoutes
-);
-
-app.use(
-  "/api/financials",
-  projectFinancialRoutes
-);
-
+app.use("/api/project-assignments",projectAssignmentRoutes);
+app.use("/api/attendance",attendanceRoutes);
+app.use("/api/financials",projectFinancialRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.get("/api/health",(_req,res)=>{
     res.json({
         success:true,

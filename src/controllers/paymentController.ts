@@ -6,6 +6,8 @@ import Invoice from "../models/Invoice.js";
 
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import { createAuditLog } from "../utils/auditLogger.js";
+import { createNotification } from "../services/notificationService.js";
+import User from "../models/User.js";
 
 
  // Record a payment against an invoice
@@ -126,6 +128,36 @@ export const createPayment = async (
     });
 
     await session.commitTransaction();
+    // Create notifications after the payment transaction succeeds
+const usersToNotify = await User.find({
+  company: req.user.company,
+  role: {
+    $in: ["admin", "accountant", "project_manager"],
+  },
+  isActive: true,
+  _id: {
+    $ne: req.user.id,
+  },
+}).select("_id role");
+
+const notificationMessage = `Payment of KES ${payment.amount.toLocaleString()} was received for invoice ${invoice.invoiceNumber}.`;
+
+await Promise.all(
+  usersToNotify.map((user) =>
+    createNotification({
+      companyId: req.user!.company,
+      userId: user._id,
+      type: "payment",
+      title: "Payment Received",
+      message: notificationMessage,
+      resource: "payment",
+      resourceId: payment._id,
+    })
+  )
+);
+
+session.endSession();
+    
 
     res.status(201).json({
       success: true,
