@@ -31,7 +31,7 @@ const generatePONumber=async (companyId:string): Promise<string>=>{
         },
        },
        {
-        new:true,
+        returnDocument:"after",
         upsert:true,
        }
     );
@@ -226,7 +226,7 @@ const usersToNotify = await User.find({
 
 const notificationMessage = `Purchase order ${purchaseOrder.poNumber} has been created for KES ${purchaseOrder.totalAmount.toLocaleString()}.`;
 
-await Promise.all(
+await Promise.allSettled(
   usersToNotify.map((user) =>
     createNotification({
       companyId: req.user!.company,
@@ -607,7 +607,7 @@ export const receivePurchaseOrder = async (
     const session=await mongoose.startSession();
     try {
 
-        session.startTransaction();
+        
         if (!req.user) {
             res.status(401).json({
                 success: false,
@@ -627,6 +627,7 @@ export const receivePurchaseOrder = async (
 
             return;
         }
+         session.startTransaction();
 
         if (!mongoose.Types.ObjectId.isValid(purchaseOrderId)) {
             res.status(400).json({
@@ -788,7 +789,7 @@ export const receivePurchaseOrder = async (
     // Everything succeeded
     await session.commitTransaction();
 
-    await session.commitTransaction();
+    
 
 await createAuditLog({
   companyId: req.user.company,
@@ -1177,9 +1178,10 @@ export const updatePurchaseOrder = async (
 
     await purchaseOrder.save();
 
-    const updatedPurchaseOrder = await PurchaseOrder.findById(
-      purchaseOrder._id
-    )
+    const updatedPurchaseOrder = await PurchaseOrder.findById({
+      _id: purchaseOrder._id,
+      company:req.user.company,
+  })
       .populate("supplier", "name phone email address contactPerson")
       .populate("project", "name location clientName status")
       .populate("requestedBy", "name email role")

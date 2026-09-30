@@ -46,7 +46,6 @@ export const createProject=async(
     $ne: req.user.id,
   },
 }).select("_id role");
-console.log("PROJECT USERS TO NOTIFY:", usersToNotify);
 
 const notificationMessage = `A new project, ${project.name}, has been created.`;
 

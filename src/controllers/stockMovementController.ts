@@ -14,12 +14,13 @@ import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 
 const calculateCurrentStock=async(
     materialId:string,
-    companyId: string
+    companyId: string,
+    session?:mongoose.ClientSession
 ):Promise<number> =>{
     const movements=await StockMovement.find({
         material:materialId,
         company:companyId,
-    })
+    }).session(session ?? null);
 
     let stock=0;
 
@@ -190,6 +191,7 @@ export const createStockMovement=async(
     req:AuthenticatedRequest,
     res:Response
 ):Promise<void> =>{
+   const session = await mongoose.startSession(); 
     try{
         if(!req.user){
             res.status(401).json({
@@ -331,21 +333,24 @@ if (referenceNumber) {
     if(type==="issue"){
         const currentStock=await calculateCurrentStock(
             materialId,
-            req.user.company
+            req.user.company,
+            session
         );
 
         if(quantity>currentStock){
             res.status(400).json({
-                success:true,
+                success:false,
                 message:"Insufficient stock",
                 currentStock,
                 requestedQuantity:quantity,
             })
             return;
         }
+        session.startTransaction();
     }
 
-    const movement=await StockMovement.create({
+    const movement=await StockMovement.create(
+        [{
         material:materialId,
         supplier:supplierId || undefined,
         project:projectId || undefined,
@@ -358,7 +363,11 @@ if (referenceNumber) {
         notes,
         movementDate,
         createdBy:req.user.id,
-    });
+    }],
+    {session}
+);
+const createdMovement=movement[0];
+await session.commitTransaction();
 
     res.status(201).json({
         success:true,
@@ -384,7 +393,7 @@ if (currentStock <= material.minimumStock) {
 
     const notificationMessage = `${material.name} stock is low. Current stock: ${currentStock} ${material.unit}. Minimum stock level: ${material.minimumStock} ${material.unit}.`;
 
-    await Promise.all(
+    await Promise.allSettled(
         usersToNotify.map((user) =>
             createNotification({
                 companyId: req.user!.company,
@@ -393,19 +402,24 @@ if (currentStock <= material.minimumStock) {
                 title: "Low Stock Alert",
                 message: notificationMessage,
                 resource: "stock_movement",
-                resourceId: movement._id,
+                resourceId: createdMovement._id,
             })
         )
     );
 }
 
     }catch(error){
+        if(session.inTransaction()){
+            await session.abortTransaction();
+        }
         console.error("Create stock movement error:",error);
 
         res.status(500).json({
             success:false,
             message:"Unable to record stock movememt",
         })
+    }finally{
+        await session.endSession();
     }
 }
 

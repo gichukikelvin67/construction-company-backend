@@ -45,7 +45,7 @@ export const protect=async(
             return;
         }
         const secret=getAccessTokenSecret();
-        console.log("Verify secret loaded:",Boolean(secret));
+        
 
         const decoded=jwt.verify(
             token,
@@ -77,7 +77,7 @@ export const protect=async(
             if(tokenIssuedAt < passwordChangedAt){
                 res.status(401).json({
                     success:false,
-                    messsage:"Session is no longer valid.Please log in again.",
+                    message:"Session is no longer valid.Please log in again.",
                 })
                 return;
             }

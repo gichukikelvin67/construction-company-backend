@@ -140,10 +140,10 @@ export const createInvoice=async(
     $ne: req.user.id,
   },
 }).select("_id role");
-console.log("USERS TO NOTIFY:", usersToNotify);
+
 const notificationMessage = `Invoice ${invoice.invoiceNumber} has been created for KES ${invoice.totalAmount.toLocaleString()}.`;
 
-await Promise.all(
+await Promise.allSettled(
   usersToNotify.map((user) =>
     createNotification({
       companyId: req.user!.company,

@@ -24,16 +24,8 @@ export const register = async (
   req: Request,
   res: Response
 ): Promise<void> => {
-  
-    const session =await mongoose.startSession();
-
-    try{
-
-    session.startTransaction();
-
-    const { companyName, name, email, password, phone } = req.body;
-
-    if (!companyName || !name || !email || !password || !phone) {
+  const{companyName,name,email,password,phone}=req.body;
+  if (!companyName || !name || !email || !password || !phone) {
       res.status(400).json({
         success: false,
         message: "All fields are required",
@@ -41,8 +33,14 @@ export const register = async (
 
       return;
     }
+  
+    const session =await mongoose.startSession();
 
-    const existingUser = await User.findOne({ email });
+    try{
+
+    session.startTransaction();
+
+    const existingUser = await User.findOne({ email }).session(session);
 
     if (existingUser) {
       res.status(409).json({
@@ -55,7 +53,7 @@ export const register = async (
 
     const existingCompany = await Company.findOne({
       email,
-    });
+    }).session(session);
 
     if (existingCompany) {
       res.status(409).json({
@@ -170,7 +168,7 @@ export const login =async(
         if(!user.isActive){
             res.status(403).json({
                 success:false,
-                message: "This account has been created",
+                message: "This account has been disabled",
             })
             return;
         }
@@ -533,7 +531,7 @@ export const logout = async (
           revokedAt: new Date(),
         },
         {
-          new:true,
+          returnDocument:"after",
         }
       );
 
@@ -846,7 +844,7 @@ export const changePassword=async(
       return;
     }
     const{currentPassword,newPassword}=req.body;
-    const user=await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).select("+password");
     if(!user){
       res.status(404).json({
         success:false,
@@ -901,7 +899,7 @@ export const changePassword=async(
     })
     res.status(200).json({
       success:true,
-      messag:"Password changed succefully.Please login again",
+      messag:"Password changed successfully.Please login again",
     })
 
   }catch(error){

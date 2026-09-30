@@ -16,7 +16,7 @@ import { createStockMovementSchema } from "../validators/stockMovementValidators
 const router=Router();
 
 router.get(
-    "/material/:materialId/stock",
+    "/material/:materialId/movements",
     protect,
     getMaterialMovements
 );

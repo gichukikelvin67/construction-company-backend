@@ -32,6 +32,5 @@ export const createNotification=async({
         notificationKey,
         isRead:false,
     })
-    console.log("NOTIFICATION CREATED:", notification);
     return notification;
 };

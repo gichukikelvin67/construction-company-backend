@@ -153,18 +153,41 @@ export const updateWorker = async (
       });
       return;
     }
+    const {
+  name,
+  phone,
+  email,
+  nationalId,
+  jobTitle,
+  dailyRate,
+  status,
+  emergencyContactName,
+  emergencyContactPhone,
+} = req.body;
 
-    const worker = await Worker.findOneAndUpdate(
-      {
-        _id: workerId,
-        company: req.user.company,
-      },
-      req.body,
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+const worker = await Worker.findOneAndUpdate(
+  {
+    _id: workerId,
+    company: req.user.company,
+  },
+  {
+    name,
+    phone,
+    email,
+    nationalId,
+    jobTitle,
+    dailyRate,
+    status,
+    emergencyContactName,
+    emergencyContactPhone,
+  },
+  {
+    returnDocument: "after",
+    runValidators: true,
+  }
+);
+   
+    
 
     if (!worker) {
       res.status(404).json({

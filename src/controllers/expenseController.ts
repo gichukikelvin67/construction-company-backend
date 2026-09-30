@@ -80,7 +80,7 @@ export const createExpense=async(
 
 const notificationMessage = `An expense of KES ${expense.amount.toLocaleString()} has been recorded for project ${project.name}.`;
 
-await Promise.all(
+await Promise.allSettled(
     usersToNotify.map((user) =>
         createNotification({
             companyId: req.user!.company,

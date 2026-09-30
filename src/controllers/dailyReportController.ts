@@ -180,13 +180,6 @@ export const getDailyReports=async(
          if (projectId) {
   const projectIdString = String(projectId).trim();
 
-  console.log("Project ID received:", projectIdString);
-  console.log("Project ID length:", projectIdString.length);
-  console.log(
-    "Project ID valid:",
-    mongoose.Types.ObjectId.isValid(projectIdString)
-  );
-
   if (!mongoose.Types.ObjectId.isValid(projectIdString)) {
     res.status(400).json({
       success: false,
