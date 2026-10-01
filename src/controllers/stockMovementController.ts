@@ -330,6 +330,8 @@ if (referenceNumber) {
     return;
   }
 }
+session.startTransaction();
+
     if(type==="issue"){
         const currentStock=await calculateCurrentStock(
             materialId,
@@ -338,6 +340,8 @@ if (referenceNumber) {
         );
 
         if(quantity>currentStock){
+          await session.abortTransaction();
+  
             res.status(400).json({
                 success:false,
                 message:"Insufficient stock",
@@ -346,7 +350,7 @@ if (referenceNumber) {
             })
             return;
         }
-        session.startTransaction();
+        
     }
 
     const movement=await StockMovement.create(
