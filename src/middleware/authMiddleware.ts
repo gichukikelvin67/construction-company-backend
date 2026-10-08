@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import User from "../models/User.js";
+import User ,{UserRole} from "../models/User.js";
 import { env } from "../config/env.js";
 
 interface JwtPayload{
@@ -11,7 +11,7 @@ interface JwtPayload{
 export interface AuthenticatedRequest extends Request{
     user?:{
         id:string;
-        role: string;
+        role: UserRole;
         company:string;
     }
 }

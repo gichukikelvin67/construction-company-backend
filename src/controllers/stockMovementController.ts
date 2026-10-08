@@ -7,6 +7,7 @@ import Material from "../models/Material.js";
 import Supplier from "../models/Supplier.js";
 import Project from "../models/Project.js";
 import User from "../models/User.js";
+import Notification from "../models/Notification.js";
 import { createNotification } from "../services/notificationService.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 
@@ -382,6 +383,15 @@ await session.commitTransaction();
     materialId,
     req.user.company
 );
+if (currentStock > material.minimumStock) {
+  await Notification.deleteMany({
+    company: req.user.company,
+    type: "stock",
+    notificationKey: {
+      $regex: `^low-stock-${material._id}-`,
+    },
+  });
+}
 
 if (currentStock <= material.minimumStock) {
     const usersToNotify = await User.find({
@@ -407,6 +417,7 @@ if (currentStock <= material.minimumStock) {
                 message: notificationMessage,
                 resource: "stock_movement",
                 resourceId: createdMovement._id,
+                notificationKey:`low-stock-${material._id}-${user._id}`,
             })
         )
     );

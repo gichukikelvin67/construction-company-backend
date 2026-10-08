@@ -26,6 +26,8 @@ import invoiceRoutes from "./routes/invoiceRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import { errorHandler } from "./middleware/errorMiddleware.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import workerAssignmentRoutes from "./routes/workerAssignmentRoutes.js";
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
 const app=express();
 app.use (
@@ -56,6 +58,8 @@ app.use("/api/project-assignments",projectAssignmentRoutes);
 app.use("/api/attendance",attendanceRoutes);
 app.use("/api/financials",projectFinancialRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/worker-assignments", workerAssignmentRoutes);
 app.get("/api/health",(_req,res)=>{
     res.json({
         success:true,
