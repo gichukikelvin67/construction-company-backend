@@ -28,6 +28,8 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import { errorHandler } from "./middleware/errorMiddleware.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import workerAssignmentRoutes from "./routes/workerAssignmentRoutes.js";
+import contactEnquiryRoutes from "./routes/contactEnquiryRoutes.js";
+import contactEnquiryManagementRoutes from "./routes/contactEnquiryManagementRoutes.js";
 dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
 const app=express();
 app.use (
@@ -60,6 +62,11 @@ app.use("/api/financials",projectFinancialRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/worker-assignments", workerAssignmentRoutes);
+app.use("/api/contact-enquiries", contactEnquiryRoutes);
+app.use(
+  "/api/contact-enquiries/manage",
+  contactEnquiryManagementRoutes
+);
 app.get("/api/health",(_req,res)=>{
     res.json({
         success:true,

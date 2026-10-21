@@ -6,9 +6,19 @@ export type MaterialUnit=
 |"piece"
 |"liter"
 |"meter"
-|"square_meter"
-|"cubic_meter"
-|"box";
+|"square_metre"
+|"cubic_metre"
+|"box"
+|"sheet"
+|"packet"
+|"drum"
+|"set"
+|"carton"
+|"roll"
+|"bundle"
+|"millilitre"
+|"pair"
+|"gram"
 
 export interface IMaterial extends Document{
     name:string;
@@ -59,6 +69,16 @@ const materialSchema=new Schema<IMaterial>(
                 "square_metre",
                 "cubic_metre",
                 "box",
+                "sheet",
+                "millilitre",
+                "packet",
+                "roll",
+                "bundle",
+                "drum",
+                "carton",
+                "set",
+                "pair",
+                "gram",
             ],
             required:true,
         },

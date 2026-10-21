@@ -95,7 +95,24 @@ export const createPayment = async (
       recordedBy: req.user.id,
     });
 
-    await payment.save({ session });
+    try {
+  await payment.save({ session });
+} catch (error) {
+  if (
+    error instanceof mongoose.mongo.MongoServerError &&
+    error.code === 11000
+  ) {
+    await session.abortTransaction();
+
+    res.status(409).json({
+      success: false,
+      message: "This payment reference has already been used by your company.",
+    });
+    return;
+  }
+
+  throw error;
+}
 
     invoice.amountPaid += amount;
     invoice.amountDue = Math.max(

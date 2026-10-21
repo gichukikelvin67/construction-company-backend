@@ -20,8 +20,10 @@ export interface IStockMovement extends Document {
 
   adjustmentDirection?:StockAdjustmentDirection;
   quantity: number;
+  stockBefore: number;
+stockAfter: number;
   unitCost?: number;
-
+  
   referenceNumber?: string;
   notes?: string;
 
@@ -78,6 +80,16 @@ const stockMovementSchema = new Schema<IStockMovement>(
       type: Number,
       required: true,
       min: 0.001,
+    },
+    stockBefore:{
+      type:Number,
+      required:true,
+      min:0,
+    },
+    stockAfter:{
+      type:Number,
+      required:true,
+      min:0,
     },
 
     unitCost: {

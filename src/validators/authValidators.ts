@@ -30,6 +30,11 @@ password: z
       /^(?:\+254|0)7\d{8}$/,
       "Please provide a valid Kenyan phone number"
     ),
+    acceptedTerms:z
+    .boolean()
+    .refine((accepted)=> accepted ===true,{
+      message:"You must accept the Terms and Conditions to register",
+    })
 
 })
 export const loginSchema = z.object({

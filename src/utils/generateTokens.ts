@@ -8,5 +8,12 @@ export const generateAccessToken=(userId:string): string =>
     jwt.sign({userId},getAccessTokenSecret(),{expiresIn:"15m"});
 
 
-export const generateRefreshToken=(userId: string): string =>
-    jwt.sign({userId},getRefreshTokenSecret(),{expiresIn:"7d"})
+export const generateRefreshToken=(
+    userId: string,
+    rememberMe=false
+): string =>
+    jwt.sign(
+        {userId},
+        getRefreshTokenSecret(),
+        {expiresIn:rememberMe? "30d": "7d"}
+            );

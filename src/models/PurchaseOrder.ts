@@ -202,7 +202,7 @@ purchaseOrderSchema.index(
 );
 
 purchaseOrderSchema.index({
-    comapny:1,
+    comapany:1,
     status:1,
     createdAt:-1,
 });

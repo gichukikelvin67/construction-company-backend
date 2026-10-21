@@ -27,7 +27,8 @@ export const protect=async(
         const authorization=req.headers.authorization;
 //check that authorizartion header exists
 // and starts with Berarer
-        if(!authorization || !authorization.startsWith("Bearer")){
+const bearerMatch=authorization?.match(/^Bearer\s+(\S+)$/i);
+        if(!bearerMatch){
             res.status(401).json({
                 success:false,
                 message:"Authentication required",
@@ -35,15 +36,10 @@ export const protect=async(
 
             return;
         }
+        const token =bearerMatch[1];
 //remove bearer and keep only JWT
-        const token=authorization.slice(7).trim();
-        if(!token){
-            res.status(401).json({
-                success:false,
-                message: "Authentication required",
-            })
-            return;
-        }
+    
+        
         const secret=getAccessTokenSecret();
         
 
@@ -95,10 +91,7 @@ export const protect=async(
 
         res.status(401).json({
             success:false,
-            message:
-            error instanceof Error
-            ? error.message
-            :"Invalid or expired access token",
-        })
+            message:"Invalid or expired access token",
+        });
     }
 }

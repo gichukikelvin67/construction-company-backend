@@ -10,7 +10,7 @@ import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import { createNotification } from "../services/notificationService.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
-
+import { createAuditLog } from "../utils/auditLogger.js";
 //GET CURRENT STOCK
 
 const calculateCurrentStock=async(
@@ -333,26 +333,55 @@ if (referenceNumber) {
 }
 session.startTransaction();
 
-    if(type==="issue"){
-        const currentStock=await calculateCurrentStock(
+        const stockBefore=await calculateCurrentStock(
             materialId,
             req.user.company,
             session
         );
 
-        if(quantity>currentStock){
-          await session.abortTransaction();
+        if(type=== "issue"&& quantity >stockBefore){
+            await session.abortTransaction();
+        
   
             res.status(400).json({
                 success:false,
                 message:"Insufficient stock",
-                currentStock,
+                currentStock:stockBefore,
                 requestedQuantity:quantity,
             })
             return;
         }
-        
+
+        let stockAfter=stockBefore;
+        if(type =="receipt"|| type=== "return"){
+            stockAfter += quantity;
+        }
+        if(type==="issue"){
+            stockAfter -=quantity;
+        }
+        if (type === "adjustment") {
+    if (adjustmentDirection === "increase") {
+        stockAfter += quantity;
     }
+
+    if (adjustmentDirection === "decrease") {
+        if (quantity > stockBefore) {
+            await session.abortTransaction();
+
+            res.status(400).json({
+                success: false,
+                message: "Insufficient stock for adjustment",
+                currentStock: stockBefore,
+                requestedQuantity: quantity,
+            });
+
+            return;
+        }
+
+        stockAfter -= quantity;
+    }
+}
+
 
     const movement=await StockMovement.create(
         [{
@@ -363,6 +392,8 @@ session.startTransaction();
         type,
         adjustmentDirection,
         quantity,
+        stockBefore,
+        stockAfter,
         unitCost,
         referenceNumber,
         notes,
@@ -371,14 +402,42 @@ session.startTransaction();
     }],
     {session}
 );
-const createdMovement=movement[0];
+
+const createdMovement = movement[0];
+
 await session.commitTransaction();
 
-    res.status(201).json({
-        success:true,
-        message:"Stock movement recorded successfully",
-        movement,
-    });
+await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "create",
+  resource: "stock_movement",
+  resourceId: createdMovement._id.toString(),
+  description: `Recorded ${type} of ${quantity} ${material.unit} for ${material.name}`,
+  metadata: {
+    materialId: material._id.toString(),
+    materialName: material.name,
+    movementType: type,
+    adjustmentDirection: adjustmentDirection || null,
+    quantity,
+    unit: material.unit,
+    stockBefore,
+    stockAfter,
+    supplierId: supplierId || null,
+    projectId: projectId || null,
+    referenceNumber: referenceNumber || null,
+    unitCost: unitCost ?? null,
+  },
+});
+
+res.status(201).json({
+  success: true,
+  message: "Stock movement recorded successfully",
+  movement,
+});
+
+
+    
     const currentStock = await calculateCurrentStock(
     materialId,
     req.user.company

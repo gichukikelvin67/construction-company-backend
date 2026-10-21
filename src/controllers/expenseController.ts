@@ -6,7 +6,7 @@ import Project from "../models/Project.js";
 import { AuthenticatedRequest } from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
 import { createNotification } from "../services/notificationService.js";
-
+import { createAuditLog } from "../utils/auditLogger.js";
 export const createExpense=async(
     req:AuthenticatedRequest,
     res:Response
@@ -67,6 +67,27 @@ export const createExpense=async(
         notes,
         recordedBy:req.user.id,
     });
+    
+await createAuditLog({
+    companyId: req.user.company,
+    userId: req.user.id,
+    action: "create",
+    resource: "expense",
+    resourceId: expense._id.toString(),
+    description: `Recorded expense of KES ${expense.amount.toLocaleString()} for project ${project.name}`,
+    metadata: {
+        projectId: project._id.toString(),
+        projectName: project.name,
+        category: expense.category,
+        amount: expense.amount,
+        description: expense.description,
+        expenseDate: expense.expenseDate,
+        receiptNumber: expense.receiptNumber || null,
+    },
+    ipAddress: req.ip,
+    userAgent: req.get("user-agent") || undefined,
+});
+
     const usersToNotify = await User.find({
     company: req.user.company,
     role: {
@@ -249,6 +270,26 @@ export const updateExpense = async (
     }
 
     await expense.save();
+    
+await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "update",
+  resource: "expense",
+  resourceId: expense._id.toString(),
+  description: `Updated expense: ${expense.description}`,
+  metadata: {
+    projectId: expense.project.toString(),
+    category: expense.category,
+    amount: expense.amount,
+    description: expense.description,
+    expenseDate: expense.expenseDate,
+    receiptNumber: expense.receiptNumber || null,
+  },
+  ipAddress: req.ip,
+  userAgent: req.get("user-agent") || undefined,
+});
+
 
     res.status(200).json({
       success: true,
@@ -317,6 +358,25 @@ export const voidExpense = async (
     expense.voidReason = reason;
 
     await expense.save();
+    
+await createAuditLog({
+  companyId: req.user.company,
+  userId: req.user.id,
+  action: "update",
+  resource: "expense",
+  resourceId: expense._id.toString(),
+  description: `Voided expense: ${expense.description}`,
+  metadata: {
+    projectId: expense.project.toString(),
+    category: expense.category,
+    amount: expense.amount,
+    voidReason: expense.voidReason,
+    voidedAt: expense.voidedAt,
+  },
+  ipAddress: req.ip,
+  userAgent: req.get("user-agent") || undefined,
+});
+
 
     res.status(200).json({
       success: true,

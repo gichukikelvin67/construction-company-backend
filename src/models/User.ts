@@ -12,6 +12,11 @@ export interface IUser extends Document{
     name:string;
     email:string;
     phone:string;
+    language:"en"|"sw";
+    timezone:string;
+    currency:"KES"| "USD";
+    profilePhoto:string | null ;
+    profilePhotoPublicId:string | null;
     password:string;
     role:UserRole;
     company: mongoose.Types.ObjectId;
@@ -24,6 +29,8 @@ export interface IUser extends Document{
     passwordResetToken:string |null;
     passwordResetExpires:Date |null;
     passwordChangedAt:Date |null;
+    termsAcceptedAt:Date | null;
+    termsVersion:string |null;
 }
 
 const userSchema=new Schema<IUser>(
@@ -42,6 +49,29 @@ const userSchema=new Schema<IUser>(
             trim:true,
 
         },
+        language: {
+    type: String,
+    enum: ["en", "sw"],
+    default: "en",
+},
+timezone: {
+    type: String,
+    enum: ["Africa/Nairobi", "UTC"],
+    default: "Africa/Nairobi",
+},
+currency: {
+    type: String,
+    enum: ["KES", "USD"],
+    default: "KES",
+},
+        profilePhoto: {
+    type: String,
+    default: null,
+},
+profilePhotoPublicId: {
+    type: String,
+    default: null,
+},
 
         password:{
             type:String,
@@ -93,6 +123,14 @@ passwordResetExpires: {
 passwordChangedAt: {
   type: Date,
   default: null,
+},
+termsAcceptedAt:{
+    type:Date,
+    default:null,
+},
+termsVersion:{
+    type:String,
+    default:null,
 },
     },
 

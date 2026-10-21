@@ -107,7 +107,12 @@ paymentSchema.index({
 paymentSchema.index({
   company: 1,
   paymentReference: 1,
-});
+},
+{
+  unique:true,
+  name:"unique_payment_reference_per_company",
+}
+);
 
 const Payment = mongoose.model<IPayment>(
   "Payment",

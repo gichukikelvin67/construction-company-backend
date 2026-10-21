@@ -29,6 +29,17 @@ export const createMaterialSchema = z.object({
     "square_metre",
     "cubic_metre",
     "box",
+    "roll",
+    "carton",
+    "millilitre",
+    "drum",
+    "bundle",
+    "sheet",
+    "pair",
+    "set",
+    "bar",
+    "packet",
+    "gram",
   ]),
 
   minimumStock: z

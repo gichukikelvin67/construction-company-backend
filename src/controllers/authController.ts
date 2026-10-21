@@ -93,6 +93,8 @@ const verificationTokenHash = hashToken(
       phone,
       company: createdCompany._id,
       role: "admin",
+      termsAcceptedAt:new Date(),
+      termsVersion:"1.0",
 
       emailVerified:false,
       emailVerificationToken:verificationTokenHash,
@@ -145,7 +147,14 @@ export const login =async(
     res:Response
 ):Promise<void> =>{
     try{
-        const {email,password}=req.body;
+        const {email,password,rememberMe=false}=req.body;
+        if(typeof rememberMe !=="boolean"){
+          res.status(400).json({
+            success:false,
+            message:"rememberMe must be a boolean",
+          })
+          return;
+        }
 
         if(!email || !password){
             res.status(400).json({
@@ -190,8 +199,12 @@ export const login =async(
         )
 
         const refreshToken=generateRefreshToken(
-            user._id.toString()
+            user._id.toString(),
+            rememberMe
         )
+        const sessionDuration=rememberMe
+        ?30* 24* 60* 60* 1000
+        :7* 24* 60* 60* 1000;
         await createAuditLog({
   companyId: user.company.toString(),
   userId: user._id.toString(),
@@ -206,9 +219,7 @@ const refreshTokenHash = hashToken(refreshToken);
 await Session.create({
   user: user._id,
   refreshTokenHash,
-  expiresAt: new Date(
-    Date.now() + 7 * 24 * 60 * 60 * 1000
-  ),
+  expiresAt: new Date(Date.now()+sessionDuration ),
   revokedAt: null,
 });
 
@@ -217,7 +228,7 @@ await Session.create({
             httpOnly:true,
             secure:process.env.NODE_ENV === "production",
             sameSite: "strict",
-            maxAge: 7 * 24 * 60 *60 *1000,
+            maxAge: sessionDuration,
             path: "/api/auth",
         })
 
@@ -395,7 +406,7 @@ if(user){
       res.status(401).json({
         success: false,
         message:
-          "Refresh token reuse detected. Please log in again.",
+          "Refresh token reuse detected. Please login again.",
       });
 
       return;
@@ -463,40 +474,51 @@ if(user){
       user._id.toString()
     );
 
-    const newRefreshToken = generateRefreshToken(
-      user._id.toString()
-    );
+    const remainingSessionMs =
+  session.expiresAt.getTime() - Date.now();
 
-    /*
-     * Never store the actual refresh token.
-     * Store only its SHA-256 hash.
-     */
-    const newRefreshTokenHash = hashToken(
-      newRefreshToken
-    );
+if (remainingSessionMs <= 0) {
+  session.revokedAt = new Date();
+  await session.save();
 
-    /*
-     * Create a new session for the new refresh token.
-     */
-    await Session.create({
-      user: user._id,
-      refreshTokenHash: newRefreshTokenHash,
-      expiresAt: new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
-      ),
-      revokedAt: null,
-    });
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/api/auth",
+  });
 
-    /*
-     * Replace the old browser cookie with the new one.
-     */
-    res.cookie("refreshToken", newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/api/auth",
-    });
+  res.status(401).json({
+    success: false,
+    message: "Refresh token has expired",
+  });
+  return;
+}
+
+const rememberMe =
+  remainingSessionMs > 7 * 24 * 60 * 60 * 1000;
+
+const newRefreshToken = generateRefreshToken(
+  user._id.toString(),
+  rememberMe
+);
+
+const newRefreshTokenHash = hashToken(newRefreshToken);
+
+await Session.create({
+  user: user._id,
+  refreshTokenHash: newRefreshTokenHash,
+  expiresAt: session.expiresAt,
+  revokedAt: null,
+});
+
+res.cookie("refreshToken", newRefreshToken, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict",
+  maxAge: remainingSessionMs,
+  path: "/api/auth",
+});
 
     res.status(200).json({
       success: true,

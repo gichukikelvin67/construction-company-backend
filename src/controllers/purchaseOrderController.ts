@@ -43,6 +43,35 @@ const generatePONumber=async (companyId:string): Promise<string>=>{
      return`PO-${counter.sequence.toString().padStart(4, "0")}`
 }
 
+const calculateMaterialStock = async (
+  materialId: string,
+  companyId: string,
+  session: mongoose.ClientSession
+): Promise<number> => {
+  const movements = await StockMovement.find({
+    material: materialId,
+    company: companyId,
+  }).session(session);
+
+  let stock = 0;
+
+  for (const movement of movements) {
+    if (movement.type === "receipt" || movement.type === "return") {
+      stock += movement.quantity;
+    } else if (movement.type === "issue") {
+      stock -= movement.quantity;
+    } else if (movement.type === "adjustment") {
+      if (movement.adjustmentDirection === "increase") {
+        stock += movement.quantity;
+      } else if (movement.adjustmentDirection === "decrease") {
+        stock -= movement.quantity;
+      }
+    }
+  }
+
+  return stock;
+};
+
 //create purchase order
 
 export const createPurchaseOrder=async(
@@ -739,6 +768,8 @@ export const receivePurchaseOrder = async (
     }
 
     // Create stock movements
+   
+    // Create stock movements
     for (const [materialId, requestedQuantity] of requestedQuantities) {
       const poItem = purchaseOrder.items.find(
         (item) => item.material.toString() === materialId
@@ -747,6 +778,14 @@ export const receivePurchaseOrder = async (
       if (!poItem) {
         continue;
       }
+
+      const stockBefore = await calculateMaterialStock(
+        materialId,
+        req.user.company,
+        session
+      );
+
+      const stockAfter = stockBefore + requestedQuantity;
 
       const receiptReference =
         `${purchaseOrder.poNumber}-RECEIPT-${new mongoose.Types.ObjectId().toString()}`;
@@ -760,6 +799,8 @@ export const receivePurchaseOrder = async (
             company: req.user.company,
             type: "receipt",
             quantity: requestedQuantity,
+            stockBefore,
+            stockAfter,
             unitCost: poItem.unitCost,
             referenceNumber: receiptReference,
             notes:
